@@ -4,8 +4,6 @@ import remarkGfm from "remark-gfm";
 import remarkMath from "remark-math";
 import type { StreamdownProps } from "streamdown";
 
-import { rehypeSplitWordsIntoSpans } from "../rehype";
-
 export const streamdownPlugins = {
   remarkPlugins: [
     remarkGfm,
@@ -17,16 +15,10 @@ export const streamdownPlugins = {
   ] as StreamdownProps["rehypePlugins"],
 };
 
-export const streamdownPluginsWithWordAnimation = {
-  remarkPlugins: [
-    remarkGfm,
-    [remarkMath, { singleDollarTextMath: true }],
-  ] as StreamdownProps["remarkPlugins"],
-  rehypePlugins: [
-    [rehypeKatex, { output: "html" }],
-    rehypeSplitWordsIntoSpans,
-  ] as StreamdownProps["rehypePlugins"],
-};
+// Kept for backwards compatibility. The per-word fade-in animation has been
+// removed for performance reasons (it caused O(N^2) re-rendering during
+// streaming). This now points at the same plugin set as `streamdownPlugins`.
+export const streamdownPluginsWithWordAnimation = streamdownPlugins;
 
 // Plugins for reasoning/thinking content — derived from streamdownPlugins but without rehypeRaw,
 // to prevent LLM-hallucinated HTML tags (e.g. <simd>) from being rendered as DOM elements.
