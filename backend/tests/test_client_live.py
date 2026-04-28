@@ -17,6 +17,12 @@ from deerflow.sandbox.security import is_host_bash_allowed
 from deerflow.uploads.manager import PathTraversalError
 
 # Skip entire module in CI or when no config.yaml exists
+# TEMP DISABLED 2026-04-28: live tests pollute backend/.deer-flow/threads/ +
+# checkpoints.db on every run because they hit the real DeerFlowClient with
+# the prod config. Re-enable by removing this block (and pair it with a
+# DEER_FLOW_HOME redirect, like test_client_e2e.py does).
+pytest.skip("live tests disabled — pollute prod .deer-flow state", allow_module_level=True)
+
 _skip_reason = None
 if os.environ.get("CI"):
     _skip_reason = "Live tests skipped in CI"

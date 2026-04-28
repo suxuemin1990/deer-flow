@@ -12,6 +12,11 @@ import uuid
 import pytest
 from langchain_core.tools import tool
 
+# TEMP DISABLED 2026-04-28: live LLM tests skipped to keep `make test` clean
+# (no real API calls, no rate-limit risk). Re-enable by removing this skip;
+# the existing `requires_llm` marker below already gates on CI / api key.
+pytest.skip("live LLM tests disabled", allow_module_level=True)
+
 requires_llm = pytest.mark.skipif(
     os.getenv("CI", "").lower() in ("true", "1") or not os.getenv("OPENAI_API_KEY"),
     reason="Requires LLM API key — skipped in CI or when OPENAI_API_KEY is unset",
