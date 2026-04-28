@@ -44,18 +44,58 @@ def test_init_node_resets_round():
     assert out["current_round"] == 0
 
 
-def test_work_loop_increments_when_below_max():
+@pytest.mark.asyncio
+async def test_work_loop_increments_when_below_max():
     from deerflow.workflows.demo_flow.nodes.work_loop_node import work_loop_node
 
-    out = work_loop_node({"task_name": "x", "max_rounds": 3, "current_round": 0})
+    out = await work_loop_node(
+        {"task_name": "x", "max_rounds": 3, "current_round": 0}, config={}
+    )
     assert out == {"current_round": 1, "is_done": False}
 
 
-def test_work_loop_signals_done_at_max():
+@pytest.mark.asyncio
+async def test_work_loop_signals_done_at_max():
     from deerflow.workflows.demo_flow.nodes.work_loop_node import work_loop_node
 
-    out = work_loop_node({"task_name": "x", "max_rounds": 3, "current_round": 3})
+    out = await work_loop_node(
+        {"task_name": "x", "max_rounds": 3, "current_round": 3}, config={}
+    )
     assert out == {"is_done": True}
+
+
+@pytest.mark.asyncio
+async def test_work_loop_drains_hints_inbox_into_history():
+    """Hints pushed via inject_hint surface in the next round's history."""
+    from deerflow.workflows.demo_flow.nodes.work_loop_node import work_loop_node
+    from deerflow.workflows.hints_inbox import push_hint, reset_inbox
+
+    reset_inbox()
+    await push_hint("child-tid-1", "go faster")
+    await push_hint("child-tid-1", "skip step 3")
+
+    out = await work_loop_node(
+        {"task_name": "x", "max_rounds": 3, "current_round": 0},
+        config={"configurable": {"thread_id": "child-tid-1"}},
+    )
+
+    assert out["current_round"] == 1
+    assert out["history"] == [
+        {"round": 1, "hints": ["go faster", "skip step 3"]}
+    ]
+
+
+@pytest.mark.asyncio
+async def test_work_loop_no_history_entry_when_no_hints():
+    from deerflow.workflows.demo_flow.nodes.work_loop_node import work_loop_node
+    from deerflow.workflows.hints_inbox import reset_inbox
+
+    reset_inbox()
+    out = await work_loop_node(
+        {"task_name": "x", "max_rounds": 3, "current_round": 0},
+        config={"configurable": {"thread_id": "child-tid-empty"}},
+    )
+    assert "history" not in out
 
 
 @pytest.mark.asyncio
@@ -82,6 +122,30 @@ def test_final_renders_markdown_report():
     assert "| 1 | 0.5 |" in md
     assert "| 2 | 0.7 |" in md
     assert "0.7" in md
+
+
+def test_final_tolerates_history_entries_without_score():
+    """Hint entries injected by work_loop_node have no 'score' key."""
+    from deerflow.workflows.demo_flow.nodes.final_node import final_node
+
+    out = final_node({
+        "task_name": "mixed",
+        "max_rounds": 3,
+        "history": [
+            {"round": 1, "score": 0.5},
+            {"round": 2, "hints": ["go faster"]},
+            {"round": 2, "score": 0.7},
+            {"round": 3, "score": 0.6},
+        ],
+    })
+    md = out["report_markdown"]
+    # Score rows still rendered.
+    assert "| 1 | 0.5 |" in md
+    assert "| 2 | 0.7 |" in md
+    assert "| 3 | 0.6 |" in md
+    # Best-round computed over score-bearing entries only.
+    assert "Best round" in md
+    assert "(score 0.7)" in md
 
 
 @pytest.mark.parametrize("done,expected", [(True, "final"), (False, "poll_wait")])

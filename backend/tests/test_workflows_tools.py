@@ -152,13 +152,12 @@ async def test_start_workflow_invalid_params_returns_tool_error(monkeypatch):
 
 
 @pytest.mark.asyncio
-async def test_inject_hint_writes_to_state(monkeypatch):
+async def test_inject_hint_writes_to_inbox(monkeypatch):
     from langchain_core.messages import HumanMessage
     from langgraph.graph import END, START, MessagesState, StateGraph
 
     from deerflow.runtime.checkpointer_singleton import reset_default_checkpointer
     from deerflow.workflows import tools as tools_mod
-    from deerflow.workflows.demo_flow import make_graph
     from deerflow.workflows.tools import inject_hint, start_workflow
 
     saver, _ = _setup_registry_and_checkpointer(monkeypatch)
@@ -202,10 +201,13 @@ async def test_inject_hint_writes_to_state(monkeypatch):
         )
         assert "inject" in result.update["messages"][0].content.lower()
 
-        # Verify _hints made it into the child state
-        graph = make_graph(checkpointer=saver)
-        state = await graph.aget_state({"configurable": {"thread_id": child_tid}})
-        assert "try smaller lr" in (state.values.get("_hints") or [])
+        # Hints live in a process-local inbox, NOT in the running graph's
+        # checkpoint state — writing to checkpoint state would be overwritten
+        # by the next pregel tick and silently lost. Verify the inbox.
+        from deerflow.workflows.hints_inbox import peek_hints, reset_inbox
+
+        assert "try smaller lr" in await peek_hints(child_tid)
+        reset_inbox()
 
         # Cancel the running task so the test exits cleanly
         if child_tid in tools_mod._BG_TASKS:
