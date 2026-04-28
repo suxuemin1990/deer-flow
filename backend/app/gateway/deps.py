@@ -50,6 +50,8 @@ async def langgraph_runtime(app: FastAPI) -> AsyncGenerator[None, None]:
         from deerflow.runtime.store_singleton import set_default_store
         set_default_store(app.state.store)
         app.state.run_manager = RunManager()
+        from deerflow.runtime.run_manager_singleton import set_default_run_manager
+        set_default_run_manager(app.state.run_manager)
         yield
 
 

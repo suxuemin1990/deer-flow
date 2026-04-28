@@ -22,10 +22,15 @@ from langchain_core.messages import SystemMessage
 from langgraph.checkpoint.base import BaseCheckpointSaver
 from langgraph.graph import END, START, StateGraph
 
-from deerflow.agents.thread_state import ThreadState
-
 
 def _build_message_appender(checkpointer: BaseCheckpointSaver):
+    # Lazy import: ``deerflow.agents.thread_state`` triggers ``agents/__init__``,
+    # which transitively imports tool builtins → workflow tools → back here,
+    # creating an import cycle when ``workflows.background`` is loaded
+    # standalone (e.g. from a fresh test process). Deferring the import to
+    # the first emit call keeps module-load free of agents-package side effects.
+    from deerflow.agents.thread_state import ThreadState
+
     g = StateGraph(ThreadState)
     g.add_node("noop", lambda s: s)
     g.add_edge(START, "noop")
