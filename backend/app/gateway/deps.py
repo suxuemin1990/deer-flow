@@ -8,12 +8,15 @@ Initialization is handled directly in ``app.py`` via :class:`AsyncExitStack`.
 
 from __future__ import annotations
 
+import logging
 from collections.abc import AsyncGenerator
 from contextlib import AsyncExitStack, asynccontextmanager
 
 from fastapi import FastAPI, HTTPException, Request
 
 from deerflow.runtime import RunManager, StreamBridge
+
+logger = logging.getLogger(__name__)
 
 
 @asynccontextmanager
@@ -33,6 +36,14 @@ async def langgraph_runtime(app: FastAPI) -> AsyncGenerator[None, None]:
         app.state.checkpointer = await stack.enter_async_context(make_checkpointer())
         from deerflow.runtime.checkpointer_singleton import set_default_checkpointer
         set_default_checkpointer(app.state.checkpointer)
+        from deerflow.workflows.registry import WorkflowRegistry
+        app.state.workflow_registry = WorkflowRegistry.load_from_app_config()
+        if app.state.workflow_registry.failed():
+            logger.warning(
+                "Workflow registry skipped %d entries: %s",
+                len(app.state.workflow_registry.failed()),
+                app.state.workflow_registry.failed(),
+            )
         app.state.store = await stack.enter_async_context(make_store())
         app.state.run_manager = RunManager()
         yield
@@ -70,3 +81,11 @@ def get_checkpointer(request: Request):
 def get_store(request: Request):
     """Return the global store (may be ``None`` if not configured)."""
     return getattr(request.app.state, "store", None)
+
+
+def get_workflow_registry(request: Request):
+    """Return the global WorkflowRegistry, or 503."""
+    reg = getattr(request.app.state, "workflow_registry", None)
+    if reg is None:
+        raise HTTPException(status_code=503, detail="Workflow registry not available")
+    return reg
