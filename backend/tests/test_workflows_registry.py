@@ -127,3 +127,40 @@ def test_registry_input_schema_must_be_basemodel(monkeypatch):
     }])
     assert registry.names() == []
     assert "bad-schema" in dict(registry.failed())
+
+
+def test_load_from_app_config_picks_up_workflows_section(monkeypatch):
+    """If get_app_config() returns an object with .workflows, registry picks them up."""
+    from types import SimpleNamespace
+
+    from deerflow.workflows.registry import WorkflowRegistry
+
+    fake_cfg = SimpleNamespace(workflows=[{
+        "name": "demo-flow",
+        "description": "demo",
+        "factory": "deerflow.workflows.demo_flow:make_graph",
+        "input_schema": "deerflow.workflows.demo_flow:DemoFlowInput",
+        "done_field": "is_done",
+        "report_field": "report_markdown",
+    }])
+    import deerflow.config as deerflow_config
+    monkeypatch.setattr(deerflow_config, "get_app_config", lambda: fake_cfg)
+
+    registry = WorkflowRegistry.load_from_app_config()
+    assert "demo-flow" in registry.names()
+    assert registry.get("demo-flow").factory.__name__ == "make_graph"
+
+
+def test_load_from_app_config_handles_missing_workflows_attr(monkeypatch):
+    """When the config has no .workflows attribute, registry is empty (not an error)."""
+    from types import SimpleNamespace
+
+    from deerflow.workflows.registry import WorkflowRegistry
+
+    fake_cfg = SimpleNamespace()  # no workflows attr
+    import deerflow.config as deerflow_config
+    monkeypatch.setattr(deerflow_config, "get_app_config", lambda: fake_cfg)
+
+    registry = WorkflowRegistry.load_from_app_config()
+    assert registry.names() == []
+    assert registry.failed() == []

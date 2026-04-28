@@ -975,3 +975,25 @@ checkpointer:
 #   failure_threshold: 5
 #   # Time in seconds before attempting to recover (default: 60)
 #   recovery_timeout_sec: 60
+
+# ============================================================================
+# Custom Workflows Configuration
+# ============================================================================
+# Custom workflow agent platform — register your LangGraph workflows here.
+# Each entry exposes the workflow to lead_agent through start_workflow(name, params).
+# See docs/superpowers/specs/2026-04-28-custom-workflow-agent-platform-design.md
+workflows:
+  - name: demo-flow
+    description: |
+      Zero-LLM demo pipeline used to validate the workflow platform end-to-end.
+      Pretends to run training rounds and produces a small markdown report.
+      Useful for testing inject_hint / cancel_workflow / get_workflow_progress
+      without spending real model tokens.
+    factory: deerflow.workflows.demo_flow:make_graph
+    input_schema: deerflow.workflows.demo_flow:DemoFlowInput
+    done_field: is_done
+    report_field: report_markdown
+    progress_fields: [current_round, max_rounds, history]
+    hint_behavior_doc: |
+      Demo-only — the graph stores hints in _hints but does not consume
+      them (no LLM nodes). Use this workflow only to verify the platform.
