@@ -26,6 +26,7 @@ import time
 from langgraph.checkpoint.base import BaseCheckpointSaver
 
 from deerflow.workflows.emit import emit_to_parent_thread
+from deerflow.workflows.finish_stamp import stamp_parent_finish
 from deerflow.workflows.registry import WorkflowSpec
 
 logger = logging.getLogger(__name__)
@@ -116,6 +117,7 @@ async def run_workflow_background(
         except Exception:
             logger.exception("could not write _error after cancel on %s", child_thread_id)
         await _wait_for_parent_idle(parent_thread_id)
+        await stamp_parent_finish(parent_thread_id)
         try:
             await emit_to_parent_thread(
                 parent_thread_id,
@@ -138,6 +140,7 @@ async def run_workflow_background(
             logger.exception("could not write _error to %s", child_thread_id)
         # Best-effort: emit failure to parent
         await _wait_for_parent_idle(parent_thread_id)
+        await stamp_parent_finish(parent_thread_id)
         try:
             await emit_to_parent_thread(
                 parent_thread_id,
@@ -154,6 +157,7 @@ async def run_workflow_background(
         report = final_state.values.get(spec.report_field)
         if report:
             await _wait_for_parent_idle(parent_thread_id)
+            await stamp_parent_finish(parent_thread_id)
             await emit_to_parent_thread(
                 parent_thread_id,
                 f"[workflow:{spec.name}] done\n\n{report}",
