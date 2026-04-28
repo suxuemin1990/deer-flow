@@ -375,3 +375,89 @@ async def test_cancel_workflow_already_finished_returns_error(monkeypatch):
     finally:
         tools_mod._THREAD_TO_WORKFLOW.pop("finished-tid", None)
         reset_default_checkpointer()
+
+
+@pytest.mark.asyncio
+async def test_get_workflow_progress_returns_platform_and_progress_fields(monkeypatch):
+    """After completion the payload includes platform fields, progress_fields, and report."""
+    from langchain_core.messages import HumanMessage
+    from langgraph.graph import END, START, MessagesState, StateGraph
+
+    from deerflow.runtime.checkpointer_singleton import reset_default_checkpointer
+    from deerflow.workflows import tools as tools_mod
+    from deerflow.workflows.tools import get_workflow_progress, start_workflow
+
+    saver, _ = _setup_registry_and_checkpointer(monkeypatch)
+    parent_tid = "chat-p1"
+
+    g = StateGraph(MessagesState)
+    g.add_node("noop", lambda s: s)
+    g.add_edge(START, "noop")
+    g.add_edge("noop", END)
+    pg = g.compile(checkpointer=saver)
+    await pg.ainvoke(
+        {"messages": [HumanMessage(content="hi")]},
+        config={"configurable": {"thread_id": parent_tid}},
+    )
+
+    try:
+        start_result = await start_workflow.ainvoke(
+            {
+                "name": "start_workflow",
+                "args": {
+                    "name": "demo-flow",
+                    "params": {"task_name": "x", "max_rounds": 2},
+                },
+                "id": "p-1",
+                "type": "tool_call",
+            },
+            config={"configurable": {"thread_id": parent_tid}},
+        )
+        msg = start_result.update["messages"][0].content
+        child_tid = msg.split("thread_id=")[1].split(".")[0].strip()
+
+        # Wait for the bg task to finish
+        if child_tid in tools_mod._BG_TASKS:
+            try:
+                await tools_mod._BG_TASKS[child_tid]
+            except Exception:
+                pass
+
+        progress_result = await get_workflow_progress.ainvoke(
+            {
+                "name": "get_workflow_progress",
+                "args": {"thread_id": child_tid},
+                "id": "p-2",
+                "type": "tool_call",
+            }
+        )
+        content = progress_result.update["messages"][0].content
+        # Payload is JSON; inspect by string match to keep the assertion robust
+        # to formatting tweaks
+        assert "is_done" in content
+        assert "current_round" in content
+        assert "history" in content
+        assert "report_markdown" in content
+        assert "demo-flow" in content
+    finally:
+        reset_default_checkpointer()
+
+
+@pytest.mark.asyncio
+async def test_get_workflow_progress_unknown_thread_returns_error(monkeypatch):
+    from deerflow.runtime.checkpointer_singleton import reset_default_checkpointer
+    from deerflow.workflows.tools import get_workflow_progress
+
+    _setup_registry_and_checkpointer(monkeypatch)
+    try:
+        result = await get_workflow_progress.ainvoke(
+            {
+                "name": "get_workflow_progress",
+                "args": {"thread_id": "unknown-tid"},
+                "id": "p-x",
+                "type": "tool_call",
+            }
+        )
+        assert "not" in result.update["messages"][0].content.lower()
+    finally:
+        reset_default_checkpointer()

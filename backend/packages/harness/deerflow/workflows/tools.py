@@ -14,6 +14,7 @@ threads.
 from __future__ import annotations
 
 import asyncio
+import json
 import logging
 import uuid
 from typing import Annotated, Any
@@ -187,3 +188,42 @@ async def cancel_workflow(
         f"Cancellation signal sent to {name!r} (thread_id={thread_id}).",
         tool_call_id,
     )
+
+
+@tool
+async def get_workflow_progress(
+    thread_id: str,
+    tool_call_id: Annotated[str, InjectedToolCallId],
+) -> Command:
+    """Return current progress of a running workflow.
+
+    Includes platform fields (_hints / _error / done_field) and the
+    workflow's declared progress_fields. When the workflow is done the
+    report_field is included too.
+    """
+    if thread_id not in _THREAD_TO_WORKFLOW:
+        return _tool_msg(
+            f"thread_id={thread_id!r} is not a registered workflow thread.",
+            tool_call_id,
+        )
+    name = _THREAD_TO_WORKFLOW[thread_id]
+    spec = _get_registry().get(name)
+    cp = get_default_checkpointer()
+    graph = spec.factory(checkpointer=cp)
+    state = await graph.aget_state({"configurable": {"thread_id": thread_id}})
+    values = state.values or {}
+
+    payload: dict[str, Any] = {
+        "workflow": name,
+        "thread_id": thread_id,
+        spec.done_field: values.get(spec.done_field, False),
+        "_hints": values.get("_hints") or [],
+        "_error": values.get("_error"),
+    }
+    for fname in spec.progress_fields:
+        if fname in values:
+            payload[fname] = values[fname]
+    if values.get(spec.done_field):
+        payload[spec.report_field] = values.get(spec.report_field)
+
+    return _tool_msg(json.dumps(payload, ensure_ascii=False, indent=2), tool_call_id)
