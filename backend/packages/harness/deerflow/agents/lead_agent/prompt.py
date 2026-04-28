@@ -703,6 +703,30 @@ def _build_custom_mounts_section() -> str:
     return f"\n**Custom Mounted Directories:**\n{mounts_list}\n- If the user needs files outside `/mnt/user-data`, use these absolute container paths directly when they match the requested directory"
 
 
+def _resolve_workflow_catalog() -> str | None:
+    """Render the workflow catalog from the global registry, or None if unavailable.
+
+    The registry is populated at gateway lifespan via
+    ``deerflow.workflows.tools.set_registry``. When unavailable (lifespan not
+    run, or no workflows configured) we return None so the prompt is built
+    without a catalog section. Never raises — catalog rendering must not
+    break agent creation.
+    """
+    try:
+        from deerflow.workflows import tools as tools_mod
+        from deerflow.workflows.prompt import render_workflow_catalog
+
+        registry = tools_mod._REGISTRY
+        if registry is None:
+            return None
+        if not registry.all():
+            return None
+        return render_workflow_catalog(registry)
+    except Exception:
+        logger.warning("workflow catalog rendering failed; prompt built without it", exc_info=True)
+        return None
+
+
 def apply_prompt_template(subagent_enabled: bool = False, max_concurrent_subagents: int = 3, *, agent_name: str | None = None, available_skills: set[str] | None = None) -> str:
     # Get memory context
     memory_context = _get_memory_context(agent_name)
@@ -752,5 +776,9 @@ def apply_prompt_template(subagent_enabled: bool = False, max_concurrent_subagen
         subagent_thinking=subagent_thinking,
         acp_section=acp_and_mounts_section,
     )
+
+    workflow_catalog = _resolve_workflow_catalog()
+    if workflow_catalog:
+        prompt = prompt + "\n\n" + workflow_catalog
 
     return prompt + f"\n<current_date>{datetime.now().strftime('%Y-%m-%d, %A')}</current_date>"
