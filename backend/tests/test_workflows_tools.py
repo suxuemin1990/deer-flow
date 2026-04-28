@@ -149,3 +149,91 @@ async def test_start_workflow_invalid_params_returns_tool_error(monkeypatch):
         assert "task_name" in msg
     finally:
         reset_default_checkpointer()
+
+
+@pytest.mark.asyncio
+async def test_inject_hint_writes_to_state(monkeypatch):
+    from langchain_core.messages import HumanMessage
+    from langgraph.graph import END, START, MessagesState, StateGraph
+
+    from deerflow.runtime.checkpointer_singleton import reset_default_checkpointer
+    from deerflow.workflows import tools as tools_mod
+    from deerflow.workflows.demo_flow import make_graph
+    from deerflow.workflows.tools import inject_hint, start_workflow
+
+    saver, _ = _setup_registry_and_checkpointer(monkeypatch)
+    parent_tid = "chat-h1"
+
+    g = StateGraph(MessagesState)
+    g.add_node("noop", lambda s: s)
+    g.add_edge(START, "noop")
+    g.add_edge("noop", END)
+    pg = g.compile(checkpointer=saver)
+    await pg.ainvoke(
+        {"messages": [HumanMessage(content="hi")]},
+        config={"configurable": {"thread_id": parent_tid}},
+    )
+
+    try:
+        # Start a workflow with enough rounds to leave it running while we inject.
+        start_result = await start_workflow.ainvoke(
+            {
+                "name": "start_workflow",
+                "args": {
+                    "name": "demo-flow",
+                    "params": {"task_name": "x", "max_rounds": 20},
+                },
+                "id": "h-1",
+                "type": "tool_call",
+            },
+            config={"configurable": {"thread_id": parent_tid}},
+        )
+        msg = start_result.update["messages"][0].content
+        # Extract child_thread_id from the success message
+        child_tid = msg.split("thread_id=")[1].split(".")[0].strip()
+
+        result = await inject_hint.ainvoke(
+            {
+                "name": "inject_hint",
+                "args": {"thread_id": child_tid, "hint": "try smaller lr"},
+                "id": "h-2",
+                "type": "tool_call",
+            }
+        )
+        assert "inject" in result.update["messages"][0].content.lower()
+
+        # Verify _hints made it into the child state
+        graph = make_graph(checkpointer=saver)
+        state = await graph.aget_state({"configurable": {"thread_id": child_tid}})
+        assert "try smaller lr" in (state.values.get("_hints") or [])
+
+        # Cancel the running task so the test exits cleanly
+        if child_tid in tools_mod._BG_TASKS:
+            tools_mod._BG_TASKS[child_tid].cancel()
+            try:
+                await tools_mod._BG_TASKS[child_tid]
+            except (asyncio.CancelledError, Exception):
+                pass
+    finally:
+        reset_default_checkpointer()
+
+
+@pytest.mark.asyncio
+async def test_inject_hint_unknown_thread_returns_error(monkeypatch):
+    from deerflow.runtime.checkpointer_singleton import reset_default_checkpointer
+    from deerflow.workflows.tools import inject_hint
+
+    _setup_registry_and_checkpointer(monkeypatch)
+    try:
+        result = await inject_hint.ainvoke(
+            {
+                "name": "inject_hint",
+                "args": {"thread_id": "not-a-workflow-thread", "hint": "x"},
+                "id": "h-3",
+                "type": "tool_call",
+            }
+        )
+        msg = result.update["messages"][0].content
+        assert "not" in msg.lower() and "workflow" in msg.lower()
+    finally:
+        reset_default_checkpointer()

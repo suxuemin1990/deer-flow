@@ -123,3 +123,36 @@ async def start_workflow(
         f"Use get_workflow_progress / inject_hint / cancel_workflow to control it.",
         tool_call_id,
     )
+
+
+@tool
+async def inject_hint(
+    thread_id: str,
+    hint: str,
+    tool_call_id: Annotated[str, InjectedToolCallId],
+) -> Command:
+    """Append a free-text hint to a running workflow's inbox (non-blocking).
+
+    The workflow decides when (and whether) to consume the hint. Multiple
+    hints accumulate in order until the workflow chooses to clear them.
+
+    Args:
+        thread_id: child thread_id returned by start_workflow.
+        hint: Free-text instruction; the workflow's behavior doc explains
+            how it is interpreted.
+    """
+    if thread_id not in _THREAD_TO_WORKFLOW:
+        return _tool_msg(
+            f"thread_id={thread_id!r} is not a registered workflow thread; "
+            f"refusing to inject (only platform-started workflows accept hints).",
+            tool_call_id,
+        )
+    name = _THREAD_TO_WORKFLOW[thread_id]
+    spec = _get_registry().get(name)
+    cp = get_default_checkpointer()
+    graph = spec.factory(checkpointer=cp)
+    await graph.aupdate_state(
+        config={"configurable": {"thread_id": thread_id}},
+        values={"_hints": [hint]},
+    )
+    return _tool_msg(f"Hint injected into {name!r} (thread_id={thread_id}).", tool_call_id)
