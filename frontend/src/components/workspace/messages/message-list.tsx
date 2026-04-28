@@ -1,4 +1,5 @@
 import type { BaseStream } from "@langchain/langgraph-sdk/react";
+import { useDeferredValue } from "react";
 
 import {
   Conversation,
@@ -50,7 +51,11 @@ export function MessageList({
   const { t } = useI18n();
   const rehypePlugins = useRehypeSplitWordsIntoSpans(thread.isLoading);
   const updateSubtask = useUpdateSubtask();
-  const messages = thread.messages;
+  // Defer the messages array so that bursts of streaming tokens collapse into
+  // at-most one render per frame instead of one render per token. React will
+  // render the heavy message tree at low priority and drop intermediate
+  // values when newer ones arrive, keeping the main thread responsive.
+  const messages = useDeferredValue(thread.messages);
   if (thread.isThreadLoading && messages.length === 0) {
     return <MessageListSkeleton />;
   }
