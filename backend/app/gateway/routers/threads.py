@@ -553,6 +553,69 @@ async def list_thread_children(
     return {"children": list(metadata.get("child_workflow_threads") or [])}
 
 
+@router.get("/{thread_id}/workflows/active")
+async def list_active_workflows(thread_id: str, request: Request) -> dict:
+    """Return non-terminal child workflows of *thread_id* with progress projection.
+
+    Each entry: ``{thread_id, name, started_at, is_done, _error, progress}``
+    where ``progress`` is the workflow's declared ``progress_fields`` projected
+    from its current state. Children whose workflow name isn't registered or
+    whose checkpoint can't be loaded are silently skipped.
+    """
+    store = get_store(request)
+    checkpointer = get_checkpointer(request)
+    if store is None:
+        return {"active": []}
+
+    record = await _store_get(store, thread_id)
+    metadata = (record or {}).get("metadata") or {}
+    children = list(metadata.get("child_workflow_threads") or [])
+    if not children:
+        return {"active": []}
+
+    # Lazy import to avoid pulling workflow modules into router cold-start.
+    from deerflow.workflows.tools import _get_registry
+
+    try:
+        registry = _get_registry()
+    except RuntimeError:
+        # Registry not initialized (e.g. tests that don't call set_registry).
+        return {"active": []}
+
+    out: list[dict] = []
+    for child in children:
+        child_tid = child.get("thread_id")
+        wf_name = child.get("name")
+        if not child_tid or not wf_name:
+            continue
+        if not registry.has(wf_name):
+            continue
+        spec = registry.get(wf_name)
+        try:
+            cp_tuple = await checkpointer.aget_tuple(
+                {"configurable": {"thread_id": child_tid, "checkpoint_ns": ""}},
+            )
+        except Exception:
+            logger.warning("active-workflows: failed to load checkpoint for %s", child_tid, exc_info=True)
+            continue
+        if cp_tuple is None:
+            continue
+        values = (cp_tuple.checkpoint or {}).get("channel_values", {}) or {}
+        if values.get(spec.done_field):
+            continue  # terminal — not active
+        progress = {f: values[f] for f in spec.progress_fields if f in values}
+        out.append({
+            "thread_id": child_tid,
+            "name": wf_name,
+            "started_at": child.get("started_at"),
+            "is_done": False,
+            "_error": values.get("_error"),
+            "progress": progress,
+        })
+
+    return {"active": out}
+
+
 @router.get("/{thread_id}/state", response_model=ThreadStateResponse)
 async def get_thread_state(thread_id: str, request: Request) -> ThreadStateResponse:
     """Get the latest state snapshot for a thread.
