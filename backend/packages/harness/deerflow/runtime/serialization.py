@@ -45,12 +45,19 @@ def serialize_lc_object(obj: Any) -> Any:
 def serialize_channel_values(channel_values: dict[str, Any]) -> dict[str, Any]:
     """Serialize channel values, stripping internal LangGraph keys.
 
-    Internal keys like ``__pregel_*`` and ``__interrupt__`` are removed
-    to match what the LangGraph Platform API returns.
+    Internal keys removed:
+    - ``__pregel_*`` and ``__interrupt__`` — pregel scheduler state.
+    - ``branch:to:*`` — internal branch-edge channels created when a
+      ``StateGraph(...)``-compiled graph writes via ``aupdate_state`` to a
+      thread whose schema doesn't natively use that channel (see
+      ``workflows.emit``). They carry ``None`` and only clutter the public
+      /state payload.
     """
     result: dict[str, Any] = {}
     for key, value in channel_values.items():
         if key.startswith("__pregel_") or key == "__interrupt__":
+            continue
+        if key.startswith("branch:to:"):
             continue
         result[key] = serialize_lc_object(value)
     return result

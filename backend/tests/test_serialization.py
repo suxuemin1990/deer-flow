@@ -107,6 +107,29 @@ def test_serialize_channel_values_strips_pregel_keys():
     assert "__interrupt__" not in result
 
 
+def test_serialize_channel_values_strips_branch_keys():
+    """``branch:to:<node>`` channels are LangGraph internal scheduler state.
+
+    They leak into channel_values when an aupdate_state is performed against
+    a graph whose schema differs from the writing graph (see
+    workflows.emit), and clutter the public /state response. Strip them
+    alongside the other internal keys.
+    """
+    from deerflow.runtime.serialization import serialize_channel_values
+
+    raw = {
+        "messages": ["hello"],
+        "title": "Test",
+        "branch:to:noop": None,
+        "branch:to:final": None,
+    }
+    result = serialize_channel_values(raw)
+    assert "messages" in result
+    assert "title" in result
+    assert "branch:to:noop" not in result
+    assert "branch:to:final" not in result
+
+
 def test_serialize_channel_values_serializes_objects():
     from deerflow.runtime.serialization import serialize_channel_values
 
