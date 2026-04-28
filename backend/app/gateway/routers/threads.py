@@ -616,6 +616,33 @@ async def list_active_workflows(thread_id: str, request: Request) -> dict:
     return {"active": out}
 
 
+@router.post("/{thread_id}/workflows/{child_id}/cancel")
+async def cancel_active_workflow(
+    thread_id: str,
+    child_id: str,
+    request: Request,
+) -> dict:
+    """User-initiated cancel for a child workflow.
+
+    Mirrors the ``cancel_workflow`` LLM tool's logic but called over HTTP from
+    the frontend widget — does not go through LLM thinking.
+
+    Returns ``{ok: bool, reason?: str}``. Does not 404 on unknown child to
+    keep semantics consistent with cancel_workflow tool (returns informative
+    text rather than HTTP error).
+    """
+    # Lazy import — same reason as in list_active_workflows.
+    from deerflow.workflows.tools import _BG_TASKS, _THREAD_TO_WORKFLOW
+
+    if child_id not in _THREAD_TO_WORKFLOW:
+        return {"ok": False, "reason": "not a registered workflow thread"}
+    task = _BG_TASKS.get(child_id)
+    if task is None or task.done():
+        return {"ok": False, "reason": "workflow already finished"}
+    task.cancel()
+    return {"ok": True}
+
+
 @router.get("/{thread_id}/state", response_model=ThreadStateResponse)
 async def get_thread_state(thread_id: str, request: Request) -> ThreadStateResponse:
     """Get the latest state snapshot for a thread.
