@@ -112,3 +112,38 @@ async def test_active_endpoint_no_metadata_returns_empty(monkeypatch):
     req = _make_request(InMemoryStore(), InMemorySaver())
     result = await list_active_workflows("missing", request=req)
     assert result == {"active": []}
+
+
+@pytest.mark.asyncio
+async def test_active_endpoint_skips_child_without_checkpoint(monkeypatch):
+    """Child registered in metadata but never checkpointed is silently skipped.
+
+    Real production state: ``_record_child_workflow_thread`` runs at workflow
+    start, so metadata can list a child whose first checkpoint hasn't landed
+    yet (or whose checkpoint write failed). Endpoint must not crash.
+    """
+    from pydantic import BaseModel
+
+    import deerflow.workflows.tools as wftools
+    from app.gateway.routers.threads import _store_upsert, list_active_workflows
+    from deerflow.workflows.registry import WorkflowRegistry, WorkflowSpec
+
+    store = InMemoryStore()
+    cp = InMemorySaver()
+    await _store_upsert(store, "p", metadata={
+        "child_workflow_threads": [
+            {"thread_id": "c-uncheckpointed", "name": "demo-flow", "started_at": "2026-01-01T00:00:00+00:00"},
+        ],
+    })
+
+    class P(BaseModel): ...
+    spec = WorkflowSpec(
+        name="demo-flow", description="", factory=lambda **_: None,
+        input_schema=P, done_field="is_done", report_field="report",
+        progress_fields=["current_round"],
+    )
+    monkeypatch.setattr(wftools, "_REGISTRY", WorkflowRegistry([spec], failures=[]))
+
+    req = _make_request(store, cp)
+    result = await list_active_workflows("p", request=req)
+    assert result == {"active": []}
