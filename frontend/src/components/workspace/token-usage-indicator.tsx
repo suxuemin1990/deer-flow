@@ -2,7 +2,7 @@
 
 import type { Message } from "@langchain/langgraph-sdk";
 import { CoinsIcon } from "lucide-react";
-import { useMemo } from "react";
+import { memo, useDeferredValue, useMemo } from "react";
 
 import {
   Tooltip,
@@ -19,14 +19,20 @@ interface TokenUsageIndicatorProps {
   className?: string;
 }
 
-export function TokenUsageIndicator({
+function TokenUsageIndicatorImpl({
   messages,
   enabled = false,
   className,
 }: TokenUsageIndicatorProps) {
   const { t } = useI18n();
 
-  const usage = useMemo(() => accumulateUsage(messages), [messages]);
+  // Defer to avoid recomputing usage on every streamed token; React will use
+  // the previous value while a render is pending.
+  const deferredMessages = useDeferredValue(messages);
+  const usage = useMemo(
+    () => accumulateUsage(deferredMessages),
+    [deferredMessages],
+  );
 
   if (!enabled) {
     return null;
@@ -86,3 +92,5 @@ export function TokenUsageIndicator({
     </Tooltip>
   );
 }
+
+export const TokenUsageIndicator = memo(TokenUsageIndicatorImpl);
