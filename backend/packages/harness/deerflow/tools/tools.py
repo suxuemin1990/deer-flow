@@ -7,12 +7,22 @@ from deerflow.reflection import resolve_variable
 from deerflow.sandbox.security import is_host_bash_allowed
 from deerflow.tools.builtins import ask_clarification_tool, present_file_tool, task_tool, view_image_tool
 from deerflow.tools.builtins.tool_search import reset_deferred_registry
+from deerflow.workflows.tools import (
+    cancel_workflow,
+    get_workflow_progress,
+    inject_hint,
+    start_workflow,
+)
 
 logger = logging.getLogger(__name__)
 
 BUILTIN_TOOLS = [
     present_file_tool,
     ask_clarification_tool,
+    start_workflow,
+    inject_hint,
+    cancel_workflow,
+    get_workflow_progress,
 ]
 
 SUBAGENT_TOOLS = [

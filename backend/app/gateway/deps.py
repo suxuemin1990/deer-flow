@@ -38,6 +38,8 @@ async def langgraph_runtime(app: FastAPI) -> AsyncGenerator[None, None]:
         set_default_checkpointer(app.state.checkpointer)
         from deerflow.workflows.registry import WorkflowRegistry
         app.state.workflow_registry = WorkflowRegistry.load_from_app_config()
+        from deerflow.workflows.tools import set_registry
+        set_registry(app.state.workflow_registry)
         if app.state.workflow_registry.failed():
             logger.warning(
                 "Workflow registry skipped %d entries: %s",
