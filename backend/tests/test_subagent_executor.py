@@ -34,12 +34,13 @@ _MOCKED_MODULE_NAMES = [
 ]
 
 
-@pytest.fixture(scope="session", autouse=True)
+@pytest.fixture(scope="module", autouse=True)
 def _setup_executor_classes():
     """Set up mocked modules and import real executor classes.
 
-    This fixture runs once per session and yields the executor classes.
-    It handles module cleanup to avoid affecting other test files.
+    Module-scoped (not session) so the sys.modules patches torn down at
+    end-of-file don't leak into sibling test files that legitimately
+    import ``deerflow.agents.thread_state`` etc.
     """
     # Save original modules
     original_modules = {name: sys.modules.get(name) for name in _MOCKED_MODULE_NAMES}

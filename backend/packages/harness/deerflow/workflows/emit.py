@@ -5,20 +5,28 @@ Uses LangGraph's standard ``aupdate_state`` so:
 - subscribers to ``/threads/{tid}/runs/stream`` see the update naturally
 - we never bypass the checkpointer with raw SQL
 
-A minimal MessagesState graph is compiled per call to obtain an updater
-bound to the given checkpointer; this is cheap (StateGraph compile is
-in-memory) and avoids needing the parent thread's actual graph factory.
+A minimal noop graph is compiled per call against ``ThreadState`` (the schema
+the lead_agent thread already uses) so ``aupdate_state`` writes a checkpoint
+that retains every ThreadState channel — using a smaller schema like
+``MessagesState`` causes persistent checkpointers (sqlite) to drop unknown
+channels (``title``, ``thread_data``, ``artifacts``).
+
+This couples ``workflows.emit`` to ``agents.thread_state.ThreadState``, which
+is acceptable: emit currently only targets lead_agent threads, and the
+alternative (passing schema in from every caller) buys nothing today.
 """
 
 from __future__ import annotations
 
 from langchain_core.messages import SystemMessage
 from langgraph.checkpoint.base import BaseCheckpointSaver
-from langgraph.graph import END, START, MessagesState, StateGraph
+from langgraph.graph import END, START, StateGraph
+
+from deerflow.agents.thread_state import ThreadState
 
 
 def _build_message_appender(checkpointer: BaseCheckpointSaver):
-    g = StateGraph(MessagesState)
+    g = StateGraph(ThreadState)
     g.add_node("noop", lambda s: s)
     g.add_edge(START, "noop")
     g.add_edge("noop", END)
