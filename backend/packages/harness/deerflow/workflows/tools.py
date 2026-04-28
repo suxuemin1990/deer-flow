@@ -119,6 +119,8 @@ async def start_workflow(
     _THREAD_TO_WORKFLOW[child_tid] = name
     task.add_done_callback(lambda _t: _BG_TASKS.pop(child_tid, None))
 
+    await _record_child_workflow_thread(parent_tid, child_tid, name)
+
     return _tool_msg(
         f"Started workflow {name!r}; thread_id={child_tid}. "
         f"Use get_workflow_progress / inject_hint / cancel_workflow to control it.",
@@ -227,3 +229,56 @@ async def get_workflow_progress(
         payload[spec.report_field] = values.get(spec.report_field)
 
     return _tool_msg(json.dumps(payload, ensure_ascii=False, indent=2), tool_call_id)
+
+
+async def _record_child_workflow_thread(
+    parent_thread_id: str,
+    child_thread_id: str,
+    name: str,
+) -> None:
+    """Append a child workflow thread record to the parent thread's store metadata.
+
+    Best-effort: any error here (store missing, parent thread record absent,
+    serialization failure) is logged and swallowed — it must not prevent the
+    background task from running.
+    """
+    try:
+        import datetime
+
+        from deerflow.runtime.store_singleton import get_default_store
+
+        store = get_default_store()
+        if store is None:
+            return
+
+        THREADS_NS = ("threads",)
+        existing = await store.aget(THREADS_NS, parent_thread_id)
+        existing_value = (existing.value if existing is not None else {}) or {}
+        metadata = dict(existing_value.get("metadata") or {})
+        children = list(metadata.get("child_workflow_threads") or [])
+        children.append({
+            "thread_id": child_thread_id,
+            "name": name,
+            "started_at": datetime.datetime.now(datetime.UTC).isoformat(),
+        })
+        metadata["child_workflow_threads"] = children
+
+        now = datetime.datetime.now(datetime.UTC).isoformat()
+        new_record = dict(existing_value) if existing_value else {
+            "thread_id": parent_thread_id,
+            "status": "idle",
+            "created_at": now,
+            "values": {},
+        }
+        new_record["thread_id"] = parent_thread_id
+        new_record["metadata"] = metadata
+        new_record["updated_at"] = now
+        new_record.setdefault("status", "idle")
+        new_record.setdefault("created_at", now)
+        new_record.setdefault("values", {})
+        await store.aput(THREADS_NS, parent_thread_id, new_record)
+    except Exception:
+        logger.warning(
+            "could not record child workflow thread for parent=%s child=%s",
+            parent_thread_id, child_thread_id, exc_info=True,
+        )

@@ -17,7 +17,7 @@ import uuid
 from datetime import UTC, datetime
 from typing import Any
 
-from fastapi import APIRouter, HTTPException, Request
+from fastapi import APIRouter, Depends, HTTPException, Request
 from pydantic import BaseModel, Field
 
 from app.gateway.deps import get_checkpointer, get_store
@@ -535,6 +535,22 @@ async def get_thread(thread_id: str, request: Request) -> ThreadResponse:
         metadata=record.get("metadata", {}),
         values=serialize_channel_values(channel_values),
     )
+
+
+@router.get("/{thread_id}/children")
+async def list_thread_children(
+    thread_id: str,
+    store: Any = Depends(get_store),
+) -> dict:
+    """Return the child workflow threads spawned by this chat thread.
+
+    Each child entry has ``thread_id``, ``name``, and ``started_at``.
+    """
+    if store is None:
+        return {"children": []}
+    record = await _store_get(store, thread_id)
+    metadata = (record or {}).get("metadata") or {}
+    return {"children": list(metadata.get("child_workflow_threads") or [])}
 
 
 @router.get("/{thread_id}/state", response_model=ThreadStateResponse)

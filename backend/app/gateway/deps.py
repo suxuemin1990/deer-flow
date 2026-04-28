@@ -47,6 +47,8 @@ async def langgraph_runtime(app: FastAPI) -> AsyncGenerator[None, None]:
                 app.state.workflow_registry.failed(),
             )
         app.state.store = await stack.enter_async_context(make_store())
+        from deerflow.runtime.store_singleton import set_default_store
+        set_default_store(app.state.store)
         app.state.run_manager = RunManager()
         yield
 

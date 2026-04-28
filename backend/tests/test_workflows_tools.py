@@ -461,3 +461,68 @@ async def test_get_workflow_progress_unknown_thread_returns_error(monkeypatch):
         assert "not" in result.update["messages"][0].content.lower()
     finally:
         reset_default_checkpointer()
+
+
+@pytest.mark.asyncio
+async def test_start_workflow_appends_child_to_parent_metadata(monkeypatch):
+    """When a parent thread record exists, start_workflow appends to its child list."""
+    from langgraph.store.memory import InMemoryStore
+
+    from app.gateway.routers.threads import _store_upsert
+    from deerflow.runtime.checkpointer_singleton import reset_default_checkpointer
+    from deerflow.runtime.store_singleton import (
+        reset_default_store,
+        set_default_store,
+    )
+    from deerflow.workflows import tools as tools_mod
+    from deerflow.workflows.tools import start_workflow
+
+    saver, _ = _setup_registry_and_checkpointer(monkeypatch)
+    parent_tid = "chat-store-1"
+
+    store = InMemoryStore()
+    set_default_store(store)
+    await _store_upsert(store, parent_tid)  # parent record exists
+
+    from langchain_core.messages import HumanMessage
+    from langgraph.graph import END, START, MessagesState, StateGraph
+    g = StateGraph(MessagesState)
+    g.add_node("noop", lambda s: s)
+    g.add_edge(START, "noop")
+    g.add_edge("noop", END)
+    pg = g.compile(checkpointer=saver)
+    await pg.ainvoke(
+        {"messages": [HumanMessage(content="hi")]},
+        config={"configurable": {"thread_id": parent_tid}},
+    )
+
+    try:
+        result = await start_workflow.ainvoke(
+            {
+                "name": "start_workflow",
+                "args": {
+                    "name": "demo-flow",
+                    "params": {"task_name": "x", "max_rounds": 2},
+                },
+                "id": "store-1",
+                "type": "tool_call",
+            },
+            config={"configurable": {"thread_id": parent_tid}},
+        )
+        msg = result.update["messages"][0].content
+        child_tid = msg.split("thread_id=")[1].split(".")[0].strip()
+
+        # Wait for bg task to complete (uses _noop sleep so it's fast)
+        if child_tid in tools_mod._BG_TASKS:
+            try:
+                await tools_mod._BG_TASKS[child_tid]
+            except Exception:
+                pass
+
+        rec = await store.aget(("threads",), parent_tid)
+        assert rec is not None
+        children = (rec.value.get("metadata") or {}).get("child_workflow_threads") or []
+        assert any(c["thread_id"] == child_tid and c["name"] == "demo-flow" for c in children)
+    finally:
+        reset_default_store()
+        reset_default_checkpointer()
