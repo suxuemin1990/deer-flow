@@ -11,8 +11,8 @@ import asyncio
 import json
 import logging
 import re
-import time
 from collections.abc import Mapping
+from datetime import UTC, datetime
 from typing import Any
 
 from fastapi import HTTPException, Request
@@ -246,7 +246,7 @@ async def _sync_thread_title_after_run(
 
         updated = dict(existing)
         updated.setdefault("values", {})["title"] = title
-        updated["updated_at"] = time.time()
+        updated["updated_at"] = datetime.now(UTC).isoformat().replace("+00:00", "Z")
         await _store_put(store, updated)
         logger.debug("Synced title %r for thread %s", title, thread_id)
     except Exception:

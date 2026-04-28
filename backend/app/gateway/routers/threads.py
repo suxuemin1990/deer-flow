@@ -13,8 +13,8 @@ matching the LangGraph Platform wire format expected by the
 from __future__ import annotations
 
 import logging
-import time
 import uuid
+from datetime import UTC, datetime
 from typing import Any
 
 from fastapi import APIRouter, HTTPException, Request
@@ -23,6 +23,38 @@ from pydantic import BaseModel, Field
 from app.gateway.deps import get_checkpointer, get_store
 from deerflow.config.paths import Paths, get_paths
 from deerflow.runtime import serialize_channel_values
+
+
+def _iso_now() -> str:
+    """Return current UTC time as an ISO-8601 string with ``Z`` suffix.
+
+    LangGraph Server protocol returns timestamps in this exact format and
+    the frontend (date-fns ``formatDistanceToNow``) parses them via
+    ``new Date(...)``.  Using raw epoch floats / strings here causes
+    ``Invalid Date`` and crashes the chats list page.
+    """
+    return datetime.now(UTC).isoformat().replace("+00:00", "Z")
+
+
+def _to_iso(value: Any) -> str:
+    """Coerce a stored timestamp to ISO-8601 (with ``Z`` suffix).
+
+    Accepts ISO strings (returned as-is), epoch ints/floats, and numeric
+    strings (legacy records written before this helper existed).  Empty
+    or unparseable values yield ``""``.
+    """
+    if value in (None, ""):
+        return ""
+    if isinstance(value, (int, float)):
+        return datetime.fromtimestamp(float(value), UTC).isoformat().replace("+00:00", "Z")
+    s = str(value)
+    # Legacy records stored ``str(time.time())`` — parse the float back.
+    try:
+        ts = float(s)
+    except (ValueError, TypeError):
+        return s  # already an ISO-ish string, return as-is
+    return datetime.fromtimestamp(ts, UTC).isoformat().replace("+00:00", "Z")
+
 
 # ---------------------------------------------------------------------------
 # Store namespace
@@ -166,7 +198,7 @@ async def _store_upsert(store, thread_id: str, *, metadata: dict | None = None, 
     ``values`` carries the agent-state snapshot exposed to the frontend
     (currently just ``{"title": "..."}``).
     """
-    now = time.time()
+    now = _iso_now()
     existing = await _store_get(store, thread_id)
     if existing is None:
         await _store_put(
@@ -255,7 +287,7 @@ async def create_thread(body: ThreadCreateRequest, request: Request) -> ThreadRe
     store = get_store(request)
     checkpointer = get_checkpointer(request)
     thread_id = body.thread_id or str(uuid.uuid4())
-    now = time.time()
+    now = _iso_now()
 
     # Idempotency: return existing record from Store when already present
     if store is not None:
@@ -264,8 +296,8 @@ async def create_thread(body: ThreadCreateRequest, request: Request) -> ThreadRe
             return ThreadResponse(
                 thread_id=thread_id,
                 status=existing_record.get("status", "idle"),
-                created_at=str(existing_record.get("created_at", "")),
-                updated_at=str(existing_record.get("updated_at", "")),
+                created_at=_to_iso(existing_record.get("created_at")),
+                updated_at=_to_iso(existing_record.get("updated_at")),
                 metadata=existing_record.get("metadata", {}),
             )
 
@@ -308,8 +340,8 @@ async def create_thread(body: ThreadCreateRequest, request: Request) -> ThreadRe
     return ThreadResponse(
         thread_id=thread_id,
         status="idle",
-        created_at=str(now),
-        updated_at=str(now),
+        created_at=now,
+        updated_at=now,
         metadata=body.metadata,
     )
 
@@ -351,8 +383,8 @@ async def search_threads(body: ThreadSearchRequest, request: Request) -> list[Th
             merged[val["thread_id"]] = ThreadResponse(
                 thread_id=val["thread_id"],
                 status=val.get("status", "idle"),
-                created_at=str(val.get("created_at", "")),
-                updated_at=str(val.get("updated_at", "")),
+                created_at=_to_iso(val.get("created_at")),
+                updated_at=_to_iso(val.get("updated_at")),
                 metadata=val.get("metadata", {}),
                 values=val.get("values", {}),
             )
@@ -387,8 +419,8 @@ async def search_threads(body: ThreadSearchRequest, request: Request) -> list[Th
             thread_resp = ThreadResponse(
                 thread_id=thread_id,
                 status=_derive_thread_status(checkpoint_tuple),
-                created_at=str(ckpt_meta.get("created_at", "")),
-                updated_at=str(ckpt_meta.get("updated_at", ckpt_meta.get("created_at", ""))),
+                created_at=_to_iso(ckpt_meta.get("created_at")),
+                updated_at=_to_iso(ckpt_meta.get("updated_at", ckpt_meta.get("created_at"))),
                 metadata=user_meta,
                 values=ckpt_values,
             )
@@ -430,7 +462,7 @@ async def patch_thread(thread_id: str, body: ThreadPatchRequest, request: Reques
     if record is None:
         raise HTTPException(status_code=404, detail=f"Thread {thread_id} not found")
 
-    now = time.time()
+    now = _iso_now()
     updated = dict(record)
     updated.setdefault("metadata", {}).update(body.metadata)
     updated["updated_at"] = now
@@ -444,8 +476,8 @@ async def patch_thread(thread_id: str, body: ThreadPatchRequest, request: Reques
     return ThreadResponse(
         thread_id=thread_id,
         status=updated.get("status", "idle"),
-        created_at=str(updated.get("created_at", "")),
-        updated_at=str(now),
+        created_at=_to_iso(updated.get("created_at")),
+        updated_at=now,
         metadata=updated.get("metadata", {}),
     )
 
@@ -498,8 +530,8 @@ async def get_thread(thread_id: str, request: Request) -> ThreadResponse:
     return ThreadResponse(
         thread_id=thread_id,
         status=status,
-        created_at=str(record.get("created_at", "")),
-        updated_at=str(record.get("updated_at", "")),
+        created_at=_to_iso(record.get("created_at")),
+        updated_at=_to_iso(record.get("updated_at")),
         metadata=record.get("metadata", {}),
         values=serialize_channel_values(channel_values),
     )
@@ -595,7 +627,7 @@ async def update_thread_state(thread_id: str, body: ThreadStateUpdateRequest, re
         channel_values.update(body.values)
 
     checkpoint["channel_values"] = channel_values
-    metadata["updated_at"] = time.time()
+    metadata["updated_at"] = _iso_now()
 
     if body.as_node:
         metadata["source"] = "update"
