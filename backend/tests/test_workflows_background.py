@@ -197,6 +197,46 @@ async def test_run_workflow_background_stamps_finish_on_success(monkeypatch):
 
 
 @pytest.mark.asyncio
+async def test_run_workflow_background_stamps_finish_on_empty_report(monkeypatch):
+    """Successful workflow with no report still stamps — terminal event is terminal."""
+    from types import SimpleNamespace
+
+    from langgraph.checkpoint.memory import InMemorySaver
+    from langgraph.store.memory import InMemoryStore
+
+    import deerflow.runtime.store_singleton as ss
+    from app.gateway.routers.threads import _store_upsert
+    from deerflow.workflows.background import run_workflow_background
+
+    store = InMemoryStore()
+    monkeypatch.setattr(ss, "get_default_store", lambda: store)
+    parent_tid = "p-stamp-empty"
+    await _store_upsert(store, parent_tid, metadata={})
+
+    async def _ok_invoke(*_a, **_kw):
+        return None
+
+    async def _aget_state(_cfg):
+        # No report_markdown — workflow ran but produced nothing visible.
+        return SimpleNamespace(values={})
+
+    def _factory(checkpointer=None):  # noqa: ARG001
+        return SimpleNamespace(ainvoke=_ok_invoke, aget_state=_aget_state)
+
+    await run_workflow_background(
+        spec=_spec_with_factory(_factory, name="empty-wf"),
+        params={"task_name": "x", "max_rounds": 1},
+        child_thread_id="c-empty",
+        parent_thread_id=parent_tid,
+        checkpointer=InMemorySaver(),
+    )
+
+    rec = await store.aget(("threads",), parent_tid)
+    assert rec is not None
+    assert "recent_workflow_finish_at" in rec.value["metadata"]
+
+
+@pytest.mark.asyncio
 async def test_run_workflow_background_stamps_finish_on_failure(monkeypatch):
     from types import SimpleNamespace
 

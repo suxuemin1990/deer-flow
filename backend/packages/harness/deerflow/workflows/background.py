@@ -151,13 +151,15 @@ async def run_workflow_background(
             logger.exception("could not emit failure to parent %s", parent_thread_id)
         return
 
-    # Success path
+    # Success path. We always stamp the parent (so the frontend can show
+    # the "unread finish" red dot for any terminal event); we only emit a
+    # report message if the workflow actually produced one.
     try:
         final_state = await graph.aget_state(cfg)
         report = final_state.values.get(spec.report_field)
+        await _wait_for_parent_idle(parent_thread_id)
+        await stamp_parent_finish(parent_thread_id)
         if report:
-            await _wait_for_parent_idle(parent_thread_id)
-            await stamp_parent_finish(parent_thread_id)
             await emit_to_parent_thread(
                 parent_thread_id,
                 f"[workflow:{spec.name}] done\n\n{report}",
