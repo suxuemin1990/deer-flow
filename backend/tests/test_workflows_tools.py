@@ -237,3 +237,141 @@ async def test_inject_hint_unknown_thread_returns_error(monkeypatch):
         assert "not" in msg.lower() and "workflow" in msg.lower()
     finally:
         reset_default_checkpointer()
+
+
+@pytest.mark.asyncio
+async def test_cancel_workflow_cancels_task_and_writes_error(monkeypatch):
+    """Cancel-mid-flight: real asyncio.sleep so we can interrupt a running node."""
+    from langchain_core.messages import HumanMessage
+    from langgraph.checkpoint.memory import InMemorySaver
+    from langgraph.graph import END, START, MessagesState, StateGraph
+
+    from deerflow.runtime.checkpointer_singleton import (
+        reset_default_checkpointer,
+        set_default_checkpointer,
+    )
+    from deerflow.workflows import tools as tools_mod
+    from deerflow.workflows.demo_flow import DemoFlowInput, make_graph
+    from deerflow.workflows.registry import WorkflowRegistry, WorkflowSpec
+    from deerflow.workflows.tools import cancel_workflow, start_workflow
+
+    # Custom setup: do NOT patch poll_wait's sleep — we need real sleep to cancel.
+    saver = InMemorySaver()
+    set_default_checkpointer(saver)
+    registry = WorkflowRegistry(
+        specs=[WorkflowSpec(
+            name="demo-flow",
+            description="d",
+            factory=make_graph,
+            input_schema=DemoFlowInput,
+            done_field="is_done",
+            report_field="report_markdown",
+            progress_fields=["current_round"],
+        )],
+        failures=[],
+    )
+    monkeypatch.setattr(tools_mod, "_get_registry", lambda: registry)
+
+    parent_tid = "chat-c1"
+    g = StateGraph(MessagesState)
+    g.add_node("noop", lambda s: s)
+    g.add_edge(START, "noop")
+    g.add_edge("noop", END)
+    pg = g.compile(checkpointer=saver)
+    await pg.ainvoke(
+        {"messages": [HumanMessage(content="hi")]},
+        config={"configurable": {"thread_id": parent_tid}},
+    )
+
+    try:
+        # max_rounds=20 (DemoFlowInput.le=20); ~40s real runtime — plenty for cancel
+        start_result = await start_workflow.ainvoke(
+            {
+                "name": "start_workflow",
+                "args": {
+                    "name": "demo-flow",
+                    "params": {"task_name": "x", "max_rounds": 20},
+                },
+                "id": "c-1",
+                "type": "tool_call",
+            },
+            config={"configurable": {"thread_id": parent_tid}},
+        )
+        msg = start_result.update["messages"][0].content
+        child_tid = msg.split("thread_id=")[1].split(".")[0].strip()
+
+        # Let the workflow enter a poll_wait sleep before cancelling.
+        await asyncio.sleep(0.3)
+
+        cancel_result = await cancel_workflow.ainvoke(
+            {
+                "name": "cancel_workflow",
+                "args": {"thread_id": child_tid},
+                "id": "c-2",
+                "type": "tool_call",
+            }
+        )
+        assert "cancel" in cancel_result.update["messages"][0].content.lower()
+
+        # Wait for the task to settle (background runner's CancelledError branch finishes)
+        if child_tid in tools_mod._BG_TASKS:
+            try:
+                await tools_mod._BG_TASKS[child_tid]
+            except (asyncio.CancelledError, Exception):
+                pass
+        else:
+            # done_callback already removed it — give the lifecycle a tick
+            await asyncio.sleep(0.1)
+
+        graph = make_graph(checkpointer=saver)
+        state = await graph.aget_state({"configurable": {"thread_id": child_tid}})
+        assert state.values.get("_error")
+        assert "cancel" in state.values["_error"].lower()
+    finally:
+        reset_default_checkpointer()
+
+
+@pytest.mark.asyncio
+async def test_cancel_workflow_unknown_thread_returns_error(monkeypatch):
+    from deerflow.runtime.checkpointer_singleton import reset_default_checkpointer
+    from deerflow.workflows.tools import cancel_workflow
+
+    _setup_registry_and_checkpointer(monkeypatch)
+    try:
+        result = await cancel_workflow.ainvoke(
+            {
+                "name": "cancel_workflow",
+                "args": {"thread_id": "unknown"},
+                "id": "c-x",
+                "type": "tool_call",
+            }
+        )
+        assert "not" in result.update["messages"][0].content.lower()
+    finally:
+        reset_default_checkpointer()
+
+
+@pytest.mark.asyncio
+async def test_cancel_workflow_already_finished_returns_error(monkeypatch):
+    """If the workflow already completed, cancel should report 'no longer running'."""
+    from deerflow.runtime.checkpointer_singleton import reset_default_checkpointer
+    from deerflow.workflows import tools as tools_mod
+    from deerflow.workflows.tools import cancel_workflow
+
+    _setup_registry_and_checkpointer(monkeypatch)
+    try:
+        # Manually register a fake "finished workflow" entry without a live task.
+        tools_mod._THREAD_TO_WORKFLOW["finished-tid"] = "demo-flow"
+        result = await cancel_workflow.ainvoke(
+            {
+                "name": "cancel_workflow",
+                "args": {"thread_id": "finished-tid"},
+                "id": "c-z",
+                "type": "tool_call",
+            }
+        )
+        msg = result.update["messages"][0].content.lower()
+        assert "no longer running" in msg or "running" in msg
+    finally:
+        tools_mod._THREAD_TO_WORKFLOW.pop("finished-tid", None)
+        reset_default_checkpointer()

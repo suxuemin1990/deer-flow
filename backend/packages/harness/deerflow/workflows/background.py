@@ -12,6 +12,7 @@ the task in a registry so cancel_workflow can cancel it.
 
 from __future__ import annotations
 
+import asyncio
 import logging
 
 from langgraph.checkpoint.base import BaseCheckpointSaver
@@ -41,6 +42,25 @@ async def run_workflow_background(
 
     try:
         await graph.ainvoke(initial, config=cfg)
+    except asyncio.CancelledError:
+        err = "CancelledError: workflow cancelled by user"
+        logger.info("workflow %s cancelled on %s", spec.name, child_thread_id)
+        try:
+            await graph.aupdate_state(
+                config=cfg,
+                values={"_error": err, spec.done_field: True},
+            )
+        except Exception:
+            logger.exception("could not write _error after cancel on %s", child_thread_id)
+        try:
+            await emit_to_parent_thread(
+                parent_thread_id,
+                f"[workflow:{spec.name}] cancelled by user",
+                checkpointer=checkpointer,
+            )
+        except Exception:
+            logger.exception("could not emit cancel notice to parent %s", parent_thread_id)
+        return
     except Exception as exc:
         err = f"{type(exc).__name__}: {exc}"
         logger.exception("workflow %s failed on %s", spec.name, child_thread_id)

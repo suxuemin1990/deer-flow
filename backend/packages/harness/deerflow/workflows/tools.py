@@ -156,3 +156,34 @@ async def inject_hint(
         values={"_hints": [hint]},
     )
     return _tool_msg(f"Hint injected into {name!r} (thread_id={thread_id}).", tool_call_id)
+
+
+@tool
+async def cancel_workflow(
+    thread_id: str,
+    tool_call_id: Annotated[str, InjectedToolCallId],
+) -> Command:
+    """Cancel a running workflow.
+
+    Sends asyncio CancelledError to the background task. The current node
+    is interrupted; state rolls back to the previous checkpoint. ``_error``
+    and ``done_field`` are set on the child state. A failure message is
+    emitted to the parent thread.
+    """
+    if thread_id not in _THREAD_TO_WORKFLOW:
+        return _tool_msg(
+            f"thread_id={thread_id!r} is not a registered workflow thread.",
+            tool_call_id,
+        )
+    name = _THREAD_TO_WORKFLOW[thread_id]
+    task = _BG_TASKS.get(thread_id)
+    if task is None or task.done():
+        return _tool_msg(
+            f"Workflow {name!r} on thread {thread_id} is no longer running.",
+            tool_call_id,
+        )
+    task.cancel()
+    return _tool_msg(
+        f"Cancellation signal sent to {name!r} (thread_id={thread_id}).",
+        tool_call_id,
+    )
