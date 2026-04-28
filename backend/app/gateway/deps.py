@@ -31,6 +31,8 @@ async def langgraph_runtime(app: FastAPI) -> AsyncGenerator[None, None]:
     async with AsyncExitStack() as stack:
         app.state.stream_bridge = await stack.enter_async_context(make_stream_bridge())
         app.state.checkpointer = await stack.enter_async_context(make_checkpointer())
+        from deerflow.runtime.checkpointer_singleton import set_default_checkpointer
+        set_default_checkpointer(app.state.checkpointer)
         app.state.store = await stack.enter_async_context(make_store())
         app.state.run_manager = RunManager()
         yield
