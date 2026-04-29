@@ -39,6 +39,7 @@ import { CopyButton } from "../copy-button";
 
 import { MarkdownContent } from "./markdown-content";
 import { MessageTokenUsage } from "./message-token-usage";
+import { WorkflowLinkCard } from "./workflow-link-card";
 
 export function MessageListItem({
   className,
@@ -197,6 +198,32 @@ function MessageContent_({
         </Task>
       </AIElementMessageContent>
     );
+  }
+
+  if (message.additional_kwargs?.element === "workflow_link") {
+    const link = message.additional_kwargs.workflow_link as
+      | {
+          child_thread_id: string;
+          name: string;
+          url: string;
+        }
+      | undefined;
+    if (link) {
+      return (
+        <div className="my-2 space-y-2">
+          {message.content && typeof message.content === "string" && (
+            <div className="text-muted-foreground text-sm whitespace-pre-wrap">
+              {message.content}
+            </div>
+          )}
+          <WorkflowLinkCard
+            childThreadId={link.child_thread_id}
+            name={link.name}
+            url={link.url}
+          />
+        </div>
+      );
+    }
   }
 
   // Reasoning-only AI message (no main response content yet)
