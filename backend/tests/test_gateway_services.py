@@ -385,3 +385,77 @@ def test_build_run_config_no_request_config():
     config = build_run_config("thread-abc", None, None)
     assert config["configurable"] == {"thread_id": "thread-abc"}
     assert "context" not in config
+
+
+# ---------------------------------------------------------------------------
+# Regression tests for bootstrap / setup_agent:
+# request body.context must propagate to BOTH configurable (read by
+# make_lead_agent) and context (read by ToolRuntime.context in setup_agent).
+# Otherwise setup_agent gets agent_name=None and writes SOUL.md to base_dir.
+# ---------------------------------------------------------------------------
+
+
+def test_merge_request_context_writes_to_both_configurable_and_context():
+    from app.gateway.services import _merge_request_context_into_run_config
+
+    config: dict = {"configurable": {"thread_id": "t-1"}}
+    _merge_request_context_into_run_config(
+        config,
+        {
+            "agent_name": "test-agent-355",
+            "is_bootstrap": True,
+            "mode": "flash",
+            "thinking_enabled": False,
+        },
+    )
+
+    assert config["configurable"]["agent_name"] == "test-agent-355"
+    assert config["configurable"]["is_bootstrap"] is True
+    assert config["configurable"]["mode"] == "flash"
+    assert config["context"]["agent_name"] == "test-agent-355"
+    assert config["context"]["is_bootstrap"] is True
+    assert config["context"]["mode"] == "flash"
+    assert config["context"]["thinking_enabled"] is False
+
+
+def test_merge_request_context_ignores_unknown_keys():
+    from app.gateway.services import _merge_request_context_into_run_config
+
+    config: dict = {}
+    _merge_request_context_into_run_config(
+        config,
+        {"agent_name": "x", "thread_id": "should-not-leak", "random": "nope"},
+    )
+
+    assert config["configurable"] == {"agent_name": "x"}
+    assert config["context"] == {"agent_name": "x"}
+
+
+def test_merge_request_context_preserves_existing_values():
+    """setdefault semantics: pre-existing values in either container win."""
+    from app.gateway.services import _merge_request_context_into_run_config
+
+    config: dict = {
+        "configurable": {"agent_name": "explicit"},
+        "context": {"is_bootstrap": False},
+    }
+    _merge_request_context_into_run_config(
+        config,
+        {"agent_name": "from-context", "is_bootstrap": True},
+    )
+
+    assert config["configurable"]["agent_name"] == "explicit"
+    assert config["context"]["is_bootstrap"] is False
+    # but missing keys still get filled
+    assert config["configurable"]["is_bootstrap"] is True
+    assert config["context"]["agent_name"] == "from-context"
+
+
+def test_merge_request_context_none_or_empty_is_noop():
+    from app.gateway.services import _merge_request_context_into_run_config
+
+    config: dict = {"configurable": {"thread_id": "t"}}
+    _merge_request_context_into_run_config(config, None)
+    _merge_request_context_into_run_config(config, {})
+
+    assert config == {"configurable": {"thread_id": "t"}}
