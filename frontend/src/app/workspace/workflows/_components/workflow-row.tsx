@@ -38,10 +38,21 @@ function summarizeProgress(workflow: WorkflowEntry): string {
   if (workflow.status === "cancelled") {
     return "Cancelled by user";
   }
-  // running: render a few progress fields
-  const entries = Object.entries(workflow.progress).slice(0, 3);
+  // running: render a few scalar progress fields. Lists/objects render
+  // poorly inline (`[object Object]`) — let the detail page show those.
+  const entries = Object.entries(workflow.progress).filter(
+    ([, v]) =>
+      v === null ||
+      v === undefined ||
+      typeof v === "string" ||
+      typeof v === "number" ||
+      typeof v === "boolean",
+  );
   if (entries.length === 0) return "starting…";
-  return entries.map(([k, v]) => `${k}=${String(v)}`).join(" · ");
+  return entries
+    .slice(0, 3)
+    .map(([k, v]) => `${k}=${String(v)}`)
+    .join(" · ");
 }
 
 function relativeTime(iso: string | null): string {

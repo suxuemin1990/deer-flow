@@ -31,6 +31,7 @@ import { MessageListItem } from "./message-list-item";
 import { MessageTokenUsageList } from "./message-token-usage";
 import { MessageListSkeleton } from "./skeleton";
 import { SubtaskCard } from "./subtask-card";
+import { WorkflowLinkCard } from "./workflow-link-card";
 
 export const MESSAGE_LIST_DEFAULT_PADDING_BOTTOM = 160;
 export const MESSAGE_LIST_FOLLOWUPS_EXTRA_PADDING_BOTTOM = 80;
@@ -225,12 +226,41 @@ export function MessageList({
               message.type === "ai" &&
               (hasToolCalls(message) ? true : !hasContent(message)),
           );
+          // workflow_link tool messages are surfaced as clickable cards
+          // below the group. They live inside the assistant:processing
+          // group (alongside the AI's tool_call), so MessageListItem
+          // never sees them — render them here.
+          const workflowLinks = group.messages
+            .filter(
+              (m) =>
+                m.type === "tool" &&
+                m.additional_kwargs?.element === "workflow_link",
+            )
+            .map((m) => {
+              const link = m.additional_kwargs?.workflow_link as
+                | { child_thread_id: string; name: string; url: string }
+                | undefined;
+              return link ? { id: m.id, link } : null;
+            })
+            .filter(
+              (x): x is { id: string; link: { child_thread_id: string; name: string; url: string } } =>
+                x !== null,
+            );
           return (
             <div key={"group-" + group.id} className="w-full">
               <MessageGroup
                 messages={group.messages}
                 isLoading={thread.isLoading}
               />
+              {workflowLinks.map(({ id, link }) => (
+                <div key={`wf-link-${id}`} className="mt-3">
+                  <WorkflowLinkCard
+                    childThreadId={link.child_thread_id}
+                    name={link.name}
+                    url={link.url}
+                  />
+                </div>
+              ))}
               <MessageTokenUsageList
                 enabled={tokenUsageEnabled}
                 isLoading={thread.isLoading}

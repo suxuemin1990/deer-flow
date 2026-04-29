@@ -49,7 +49,18 @@ export function WorkflowChatPanel({ parentThreadId, workflow }: Props) {
   }, [messages.length]);
 
   const terminal = isTerminal(workflow.status);
-  const progressEntries = Object.entries(workflow.progress);
+  // Render progress fields compactly. Skip non-scalar values (lists,
+  // objects) — they don't fit on a one-line header and would render as
+  // "[object Object]"; users see the full structured view in the
+  // terminal summary card / message panel below.
+  const progressEntries = Object.entries(workflow.progress).filter(
+    ([, v]) =>
+      v === null ||
+      v === undefined ||
+      typeof v === "string" ||
+      typeof v === "number" ||
+      typeof v === "boolean",
+  );
 
   return (
     <div className="flex h-full flex-col">
