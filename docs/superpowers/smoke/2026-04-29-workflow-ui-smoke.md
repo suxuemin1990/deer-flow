@@ -45,25 +45,22 @@ Convention: ☐ pending · ☑ pass · ✗ fail · ⚠️ partial / blocked.
    to compile the appender so all channels survive.
    (Commit `0532eb11`.)
 
-## Bugs found in re-run (2026-04-29 afternoon)
+## Bugs found in re-run (2026-04-29 afternoon) — fixed in plan 2026-04-29-workflow-detail-page-fixes
 
-5. ✗ **OPEN — Injection during a *running* workflow loses the
-   HumanMessage.** Reproduced on demo-flow with `max_rounds=8` and
-   `sleep=8s/round`: POST `/threads/{p}/workflows/{c}/messages`
-   returns 200, but child thread's `state.values.messages` stays
-   empty across the rest of the run and after completion (`messages`
-   key absent or count 0). Same workflow, after `is_done=True`, accepts
-   injection cleanly (verified — `curl注入测试` persisted on
-   `72a093be`). Hypothesis: while `graph.ainvoke(...)` is mid-run,
-   the running task commits each step's checkpoint with its own
-   cached view of channels (which never observes the inject's branch
-   checkpoint), overwriting the inject. Same checkpointer; same
-   thread_id; not a routing issue. **This invalidates previous round's
-   ☑ on D14/D15** — the bubbles that appeared back then likely
-   rendered briefly between an inject-checkpoint and the next
-   running-task-step-overwrite, then disappeared. Needs investigation
-   before declaring bidirectional chat shippable; current channel
-   delivery promise only holds for terminal-state injections.
+5. ✓ **FIXED — Injection during a *running* workflow loses the
+   HumanMessage.** (Confirmed cause: SQLite checkpointer + concurrent
+   `aupdate_state` race; running pregel commits checkpoint based on
+   in-memory channel view, overwriting the inject.)
+   **Fix**: routed running-time inject through process-local
+   `hints_inbox`; the running task's loop node drains it and emits
+   HumanMessage via node return so `add_messages` reducer merges into
+   the next checkpoint without race. Terminal-state inject still uses
+   `aupdate_state` (no race because no running task).
+   - hints_inbox restored as side-channel (commit `04076160`)
+   - inject_user_message_to_workflow branches on _BG_TASKS (commit `5ec964a7`)
+   - Frontend optimistic pending bubble (commit `937df654`)
+   Verified end-to-end on AsyncSqliteSaver via
+   `tests/test_inject_during_running_workflow.py` and live browser smoke.
 
 ## A. Sidebar / 路由
 
@@ -92,13 +89,14 @@ Convention: ☐ pending · ☑ pass · ✗ fail · ⚠️ partial / blocked.
 
 - ☑ **D12** Header `demo-flow · {status} · current_round=N · max_rounds=N`
 - ☑ **D13** 初始无 AIMessage(demo-flow 是无 LLM 工作流,符合预期)
-- ⚠️ **D14** 输入框输入 + Enter 发送 — 代码路径正确,UI 上 textarea
-  会清空,但当工作流运行中时消息丢失(见 Bug 5)
-- ⚠️ **D15** user 气泡出现 + ✓ — 工作流终态后注入可见
-  (`curl注入测试` 在 done workflow 上持久),运行中注入不可见
-- ✗ **D16** ✓✓ 不可达 —— 注入在运行中根本进不了 state(见 Bug 5);
-  原"running Pregel 不重读外部 state 写入"的描述偏轻,实际是
-  *消息直接被运行任务的下一个 checkpoint 写覆盖丢失*
+- ☑ **D14** 输入框输入 + Enter 发送 — textarea 清空,pending 乐观气泡
+  立即出现(`opacity-60` + `sending…`),工作流下一 tick drain inbox
+  写入 messages,polled state 同步后 pending 气泡自动消失
+- ☑ **D15** user 气泡出现 + ack — 通过 hints_inbox 路由,running 期间
+  注入不再丢失。**Bug 5 已修复**(commit `5ec964a7`)
+- ☑ **D16** ✓✓ 在 demo-flow 上可达 — 注入在 round 4 进入 inbox,下一
+  round drain 后写入 state 时再次出现在 hits/messages,polled state
+  catches up,ack 自动升级到 ✓✓ (`ackFor` 看到后续 messages → consumed)
 - ☑ **D17** Shift+Enter 换行(代码路径正确)
 
 ## E. inject_hint 工具仍可用
@@ -123,6 +121,16 @@ Convention: ☐ pending · ☑ pass · ✗ fail · ⚠️ partial / blocked.
 - ☑ **G26** Hub row 显示 ✓ + report 首句预览
 - ☑ **G27** 详情页顶部 sticky summary 卡显示完整 report markdown
   (纯 `<pre>` 渲染,markdown 高亮是 polish 项)
+
+## L. Progress Timeline (新增,2026-04-29-workflow-detail-page-fixes)
+
+- ☑ **L40** 详情页 PROGRESS 区域显示,标题灰色 uppercase
+- ☑ **L41** 每条 history 一行 row,左侧 dot(最新 filled,older hollow)
+- ☑ **L42** Row 渲染 scalar k=v(`round=N · score=0.X`),用 ` · ` 连接
+- ☑ **L43** Hint 条目以 `💬 <text>` 渲染(实测 `round=4 · 💬 请加大探索强度`)
+- ☑ **L44** Container `max-h-[40vh]` overflow 滚动;新条目 autoscroll 到底
+- ☑ **L45** Workflow 没声明 `progress_timeline_fields` 时不渲染本区(`null` 早返)
+- ☑ **L46** 6 个组件单元测试全过(test/unit/components/workspace/workflows)
 
 ## H. 失败态
 
@@ -153,20 +161,22 @@ Convention: ☐ pending · ☑ pass · ✗ fail · ⚠️ partial / blocked.
 
 ## 综合判定
 
-✅ **大部分核心路径通过**(A → B → C → F → G → I → J → K)。
-✗ **D14-D16 暴露真实数据丢失 bug**(Bug 5);bidirectional chat 在
-  running 状态下不可用,只在终态可用。这与设计目标(运行中提示)冲突,
-  必须修复后才能宣告 ship。
-✅ **4 个 round-1 smoke bugs 修复并附回归测试**。
-✅ **后端 2242 测试全 pass**;**前端 typecheck + lint clean**。
+✅ **核心路径全部通过**(A → B → C → D → F → G → I → J → K → L)。
+✅ **Bug 5 已修复**(commits `04076160`/`5ec964a7`/`937df654`);bidirectional
+  chat 在 running 状态下可用 — D14/D15/D16 全部 ☑。
+✅ **5 个 smoke bugs 全部修复并附回归测试**(round-1 4 + Bug 5)。
+✅ **Progress Timeline 落地**(plan 2026-04-29-workflow-detail-page-fixes 完成 7 个 task)。
+✅ **后端 2250 测试全 pass + 3 skipped**;**前端 34/34 + typecheck + lint clean**。
 
-## 建议优先级
+## 后续可选 polish
 
-1. **修 Bug 5 (D14-D16)** — 调查 LangGraph SQLite checkpointer 在
-   `aupdate_state` vs 并发 `ainvoke` 步进时的写覆盖语义;考虑
-   (a) 在 running task 内显式重读最新 checkpoint,或
-   (b) 改用专门的"挂起 → 注入 → 续跑"模式(`graph.aupdate_state`
-   后通过 interrupt 触发再运行)
-2. **写一个真 LLM 工作流的 smoke fixture** —— 当前 demo-flow 太
-   纯算节点,不能反映带 LLM 的 workflow 行为
-3. **可选 polish** —— summary `<pre>` → `MarkdownContent`
+1. **Progress timeline 高级展示** —— 当前用 `key=value` 文本拼接,可视化
+   增强(分数趋势图/热力图)是后续选项,demo-flow 当前需求不强。
+2. **真 LLM 工作流 smoke fixture** —— 当前 demo-flow 太纯算节点,
+   不能反映带 LLM 的 workflow 行为(尤其是 ack 机制在带 LLM workflow 上的体感)。
+3. **Markdown 渲染** —— summary `<pre>` → `MarkdownContent` 组件。
+4. **UI 文案 i18n** —— "PROGRESS" / "sending…" / "No messages yet." 等
+   英文字符串与周边中文 UI 不一致,后续 i18n 时统一。
+5. **多 worker 部署支持** —— 当前 `_BG_TASKS` 是单进程内存表,多 worker
+   时跨进程注入会路由错。`emit.py` docstring 已标注;若上线多 worker
+   需改成 Redis pub-sub 或类似机制。
