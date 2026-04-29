@@ -3,7 +3,6 @@
 from __future__ import annotations
 
 import pytest
-from langchain_core.messages import HumanMessage
 from langgraph.checkpoint.memory import MemorySaver
 
 
