@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import asyncio
+import re
 
 import pytest
 
@@ -75,7 +76,7 @@ async def test_full_lifecycle_demo_flow(monkeypatch):
             config={"configurable": {"thread_id": parent_tid}},
         )
         msg = sr.update["messages"][0].content
-        child_tid = msg.split("thread_id=")[1].split(".")[0].strip()
+        child_tid = re.search(r"thread_id=([0-9a-f-]+)", msg).group(1)
 
         # 2. Poll progress until report_markdown appears in payload
         for i in range(50):
@@ -183,7 +184,7 @@ async def test_full_lifecycle_with_hint_injection(monkeypatch):
             config={"configurable": {"thread_id": parent_tid}},
         )
         msg = sr.update["messages"][0].content
-        child_tid = msg.split("thread_id=")[1].split(".")[0].strip()
+        child_tid = re.search(r"thread_id=([0-9a-f-]+)", msg).group(1)
 
         # Wait for the bg task to complete (it runs fast with _noop sleep)
         if child_tid in tools_mod._BG_TASKS:
