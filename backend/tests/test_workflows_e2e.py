@@ -109,8 +109,9 @@ async def test_full_lifecycle_demo_flow(monkeypatch):
         assert "history" in payload
         assert "report_markdown" in payload
 
-        # 5. Verify _hints is empty (no injection happened)
-        assert '"_hints": []' in payload
+        # 5. _hints is no longer part of the payload (messages channel is the
+        #    source of truth post-redesign).
+        assert '"_hints"' not in payload
     finally:
         reset_default_checkpointer()
 
@@ -131,7 +132,6 @@ async def test_full_lifecycle_with_hint_injection(monkeypatch):
     from deerflow.workflows.demo_flow.nodes import poll_wait_node as pw
     from deerflow.workflows.registry import WorkflowRegistry, WorkflowSpec
     from deerflow.workflows.tools import (
-        get_workflow_progress,
         inject_hint,
         start_workflow,
     )
@@ -192,7 +192,8 @@ async def test_full_lifecycle_with_hint_injection(monkeypatch):
             except Exception:
                 pass
 
-        # After completion, inject_hint still works (it just appends to a now-final state)
+        # After completion, inject_hint still works (it just appends a
+        # HumanMessage to the now-final messages channel).
         await inject_hint.ainvoke(
             {
                 "name": "inject_hint",
@@ -202,15 +203,13 @@ async def test_full_lifecycle_with_hint_injection(monkeypatch):
             }
         )
 
-        pr = await get_workflow_progress.ainvoke(
-            {
-                "name": "get_workflow_progress",
-                "args": {"thread_id": child_tid},
-                "id": "eh-3",
-                "type": "tool_call",
-            }
-        )
-        payload = pr.update["messages"][0].content
-        assert "post-mortem note" in payload
+        # The hint must be visible in the child's messages channel.
+        graph = make_graph(checkpointer=saver)
+        st = await graph.aget_state({"configurable": {"thread_id": child_tid}})
+        msgs = st.values.get("messages") or []
+        from langchain_core.messages import HumanMessage as _HM
+        assert any(
+            isinstance(m, _HM) and "post-mortem note" in m.content for m in msgs
+        ), f"expected post-mortem note in child messages; got {msgs!r}"
     finally:
         reset_default_checkpointer()
