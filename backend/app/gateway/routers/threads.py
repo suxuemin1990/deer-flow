@@ -790,16 +790,18 @@ async def post_workflow_message(
     the URL for future per-parent authorization checks).
     """
     from deerflow.workflows import emit as emit_mod
-    from deerflow.workflows.tools import _THREAD_TO_WORKFLOW
+    from deerflow.workflows.tools import _THREAD_TO_WORKFLOW, _get_registry
 
     if child_id not in _THREAD_TO_WORKFLOW:
         raise HTTPException(
             status_code=404,
             detail=f"child_id={child_id!r} is not a registered workflow thread",
         )
+    name = _THREAD_TO_WORKFLOW[child_id]
+    spec = _get_registry().get(name)
     cp = get_checkpointer(request)
     await emit_mod.inject_user_message_to_workflow(
-        child_id, body.content, checkpointer=cp,
+        child_id, body.content, spec=spec, checkpointer=cp,
     )
     return {"ok": True}
 

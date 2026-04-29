@@ -72,6 +72,7 @@ async def inject_user_message_to_workflow(
     child_thread_id: str,
     content: str,
     *,
+    spec,
     checkpointer: BaseCheckpointSaver,
 ) -> None:
     """Append a HumanMessage to a workflow child thread's messages channel.
@@ -81,18 +82,29 @@ async def inject_user_message_to_workflow(
     into the parent. Workflow nodes consume new HumanMessages by reading
     ``state["messages"]`` at the start of each tick.
 
-    Note:
-        Requires the workflow's state schema to declare a ``messages``
-        channel with the ``add_messages`` reducer; otherwise the field is
-        silently dropped by the checkpointer (sqlite). Specs that should
-        accept chat injection must set ``accepts_chat=True`` and define
-        ``messages`` in their TypedDict.
+    Why we use the caller-supplied workflow spec instead of a generic
+    noop graph: SQLite checkpointer only serializes channels declared
+    on the schema being used to write. Writing HumanMessage via a graph
+    compiled against ``ThreadState`` (channels = messages, title,
+    thread_data, artifacts) silently drops every workflow-specific
+    field on the next checkpoint — wiping the workflow's state. By
+    using ``spec.factory(checkpointer=...)``, the appender graph has
+    the workflow's real TypedDict and every channel survives.
+
+    Args:
+        child_thread_id: Target child workflow thread.
+        content: Free-text user instruction.
+        spec: The :class:`WorkflowSpec` of the workflow on
+            ``child_thread_id``. The caller is responsible for looking
+            it up; passing a spec from a different workflow would
+            corrupt state.
+        checkpointer: Shared checkpointer.
     """
     from langchain_core.messages import HumanMessage
 
-    appender = _build_message_appender(checkpointer)
+    appender = spec.factory(checkpointer=checkpointer)
     await appender.aupdate_state(
         config={"configurable": {"thread_id": child_thread_id}},
         values={"messages": [HumanMessage(content=content)]},
-        as_node="noop",
+        as_node="__start__",
     )

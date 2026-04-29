@@ -178,8 +178,11 @@ async def inject_hint(
     name = _THREAD_TO_WORKFLOW[thread_id]
     from deerflow.workflows.emit import inject_user_message_to_workflow
 
+    spec = _get_registry().get(name)
     cp = get_default_checkpointer()
-    await inject_user_message_to_workflow(thread_id, hint, checkpointer=cp)
+    await inject_user_message_to_workflow(
+        thread_id, hint, spec=spec, checkpointer=cp,
+    )
     return _tool_msg(f"Hint injected into {name!r} (thread_id={thread_id}).", tool_call_id)
 
 

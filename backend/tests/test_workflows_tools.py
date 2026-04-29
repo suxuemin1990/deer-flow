@@ -536,23 +536,39 @@ async def test_start_workflow_appends_child_to_parent_metadata(monkeypatch):
 
 @pytest.mark.asyncio
 async def test_inject_hint_writes_human_message_via_messages_channel(monkeypatch):
-    """inject_hint must call inject_user_message_to_workflow, not push_hint."""
+    """inject_hint must call inject_user_message_to_workflow, not push_hint,
+    and must pass the looked-up WorkflowSpec so the appender uses the
+    workflow's own state schema (not ThreadState)."""
     import deerflow.workflows.tools as wftools
     from deerflow.workflows.tools import inject_hint
 
+    # Build a fake registry the tool can resolve "demo-flow" against.
+    from deerflow.workflows.registry import WorkflowRegistry, WorkflowSpec
+    from pydantic import BaseModel
+
+    class _IS(BaseModel):
+        pass
+
+    fake_spec = WorkflowSpec(
+        name="demo-flow", description="x", factory=lambda **k: object(),
+        input_schema=_IS, done_field="is_done",
+        report_field="report_markdown", progress_fields=[],
+    )
     monkeypatch.setattr(
         wftools, "_THREAD_TO_WORKFLOW", {"c": "demo-flow"}, raising=False,
     )
+    monkeypatch.setattr(
+        wftools, "_REGISTRY", WorkflowRegistry([fake_spec], []), raising=False,
+    )
 
     captured: dict = {}
-    async def fake_inject(child_tid, content, *, checkpointer):
+    async def fake_inject(child_tid, content, *, spec, checkpointer):
         captured["child_tid"] = child_tid
         captured["content"] = content
+        captured["spec_name"] = spec.name
 
     import deerflow.workflows.emit as emit_mod
     monkeypatch.setattr(emit_mod, "inject_user_message_to_workflow", fake_inject)
-
-    # Also stub get_default_checkpointer so the tool's import succeeds
     monkeypatch.setattr(wftools, "get_default_checkpointer", lambda: object())
 
     result = await inject_hint.ainvoke({
@@ -562,8 +578,11 @@ async def test_inject_hint_writes_human_message_via_messages_channel(monkeypatch
         "type": "tool_call",
     })
 
-    assert captured == {"child_tid": "c", "content": "use dropout"}
-    # Verify return Command still has a ToolMessage
+    assert captured == {
+        "child_tid": "c",
+        "content": "use dropout",
+        "spec_name": "demo-flow",
+    }
     msg = result.update["messages"][0]
     assert "demo-flow" in msg.content
 

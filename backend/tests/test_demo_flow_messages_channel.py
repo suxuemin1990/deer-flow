@@ -6,6 +6,19 @@ import pytest
 from langgraph.checkpoint.memory import MemorySaver
 
 
+def _spec(make_graph):
+    from deerflow.workflows.demo_flow import DemoFlowInput
+    from deerflow.workflows.registry import WorkflowSpec
+
+    return WorkflowSpec(
+        name="demo-flow", description="x", factory=make_graph,
+        input_schema=DemoFlowInput, done_field="is_done",
+        report_field="report_markdown",
+        progress_fields=["current_round", "max_rounds"],
+        accepts_chat=True,
+    )
+
+
 @pytest.mark.asyncio
 async def test_demo_flow_records_injected_human_message_in_history():
     from deerflow.workflows.demo_flow import make_graph
@@ -18,7 +31,7 @@ async def test_demo_flow_records_injected_human_message_in_history():
 
     # Inject a user message before running
     await inject_user_message_to_workflow(
-        child_tid, "use dropout", checkpointer=cp,
+        child_tid, "use dropout", spec=_spec(make_graph), checkpointer=cp,
     )
 
     # Run demo flow
@@ -49,7 +62,7 @@ async def test_demo_flow_seen_msg_ids_prevents_double_processing():
     config = {"configurable": {"thread_id": child_tid}}
 
     await inject_user_message_to_workflow(
-        child_tid, "first hint", checkpointer=cp,
+        child_tid, "first hint", spec=_spec(make_graph), checkpointer=cp,
     )
 
     final = await graph.ainvoke(
