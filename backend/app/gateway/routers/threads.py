@@ -441,6 +441,24 @@ async def search_threads(body: ThreadSearchRequest, request: Request) -> list[Th
     # -----------------------------------------------------------------------
     results = list(merged.values())
 
+    # Filter out workflow child threads. They live on the same checkpointer
+    # as user chat threads (so they survive restart and can be queried for
+    # state) but are not user-facing — they appear as "Untitled" rows in
+    # the chat sidebar otherwise. Source of truth: each parent thread
+    # records its children in metadata.child_workflow_threads.
+    workflow_child_ids: set[str] = set()
+    for r in results:
+        children = r.metadata.get("child_workflow_threads") if r.metadata else None
+        if not isinstance(children, list):
+            continue
+        for entry in children:
+            if isinstance(entry, dict):
+                tid = entry.get("thread_id")
+                if isinstance(tid, str) and tid:
+                    workflow_child_ids.add(tid)
+    if workflow_child_ids:
+        results = [r for r in results if r.thread_id not in workflow_child_ids]
+
     if body.metadata:
         results = [r for r in results if all(r.metadata.get(k) == v for k, v in body.metadata.items())]
 
