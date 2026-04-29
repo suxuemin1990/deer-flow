@@ -15,6 +15,11 @@ from deerflow.sandbox.exceptions import (
     SandboxRuntimeError,
 )
 from deerflow.sandbox.file_operation_lock import get_file_operation_lock
+from deerflow.sandbox.local.bwrap_runner import (
+    BwrapMount,
+    BwrapNotInstalledError,
+    execute_bwrap,
+)
 from deerflow.sandbox.sandbox import Sandbox
 from deerflow.sandbox.sandbox_provider import get_sandbox_provider
 from deerflow.sandbox.search import GrepMatch
@@ -986,6 +991,53 @@ def _truncate_ls_output(output: str, max_chars: int) -> str:
     return f"{output[:kept]}{marker}"
 
 
+def _execute_local_bash_in_bwrap(command: str, thread_data: ThreadDataState | None) -> str:
+    """Run *command* in bubblewrap with the per-thread workspace bind-mounted.
+
+    The container path ``/mnt/user-data`` is a real bind mount of the thread's
+    host directory ``{base_dir}/threads/{thread_id}/user-data``, so absolute
+    paths inside generated scripts (e.g. ``open('/mnt/user-data/uploads/x')``)
+    actually resolve at runtime — unlike the previous string-rewrite
+    approach. Network is shared with the host so ``pip install`` keeps
+    working; PID/IPC/UTS namespaces are isolated.
+    """
+    if thread_data is None:
+        raise SandboxRuntimeError("Thread data not available for local sandbox")
+    workspace_path = thread_data.get("workspace_path")
+    if not workspace_path:
+        raise SandboxRuntimeError("Thread workspace_path is not configured")
+
+    # workspace_path = {base_dir}/threads/{tid}/user-data/workspace
+    # parent          = {base_dir}/threads/{tid}/user-data  ← bind to /mnt/user-data
+    user_data_host_dir = str(Path(workspace_path).parent)
+
+    skills_host_dir = _get_skills_host_path()
+
+    extra_mounts: list[BwrapMount] = []
+    for mount in _get_custom_mounts():
+        extra_mounts.append(
+            BwrapMount(
+                host_path=str(Path(mount.host_path).resolve()),
+                container_path=mount.container_path,
+                read_only=getattr(mount, "read_only", False),
+            )
+        )
+
+    rc, stdout, stderr = execute_bwrap(
+        command,
+        user_data_host_dir=user_data_host_dir,
+        skills_host_dir=skills_host_dir,
+        extra_mounts=extra_mounts,
+    )
+
+    output = stdout
+    if stderr:
+        output += f"\nStd Error:\n{stderr}" if output else stderr
+    if rc != 0:
+        output += f"\nExit Code: {rc}"
+    return output if output else "(no output)"
+
+
 @tool("bash", parse_docstring=True)
 def bash_tool(runtime: ToolRuntime[ContextT, ThreadState], description: str, command: str) -> str:
     """Execute a bash command in a Linux environment.
@@ -1006,10 +1058,7 @@ def bash_tool(runtime: ToolRuntime[ContextT, ThreadState], description: str, com
                 return f"Error: {LOCAL_HOST_BASH_DISABLED_MESSAGE}"
             ensure_thread_directories_exist(runtime)
             thread_data = get_thread_data(runtime)
-            validate_local_bash_command_paths(command, thread_data)
-            command = replace_virtual_paths_in_command(command, thread_data)
-            command = _apply_cwd_prefix(command, thread_data)
-            output = sandbox.execute_command(command)
+            output = _execute_local_bash_in_bwrap(command, thread_data)
             try:
                 from deerflow.config.app_config import get_app_config
 
@@ -1028,6 +1077,8 @@ def bash_tool(runtime: ToolRuntime[ContextT, ThreadState], description: str, com
             max_chars = 20000
         return _truncate_bash_output(sandbox.execute_command(command), max_chars)
     except SandboxError as e:
+        return f"Error: {e}"
+    except BwrapNotInstalledError as e:
         return f"Error: {e}"
     except PermissionError as e:
         return f"Error: {e}"
