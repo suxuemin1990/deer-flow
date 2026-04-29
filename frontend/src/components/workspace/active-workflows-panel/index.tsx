@@ -1,6 +1,5 @@
 "use client";
 
-import { useParams } from "next/navigation";
 import { toast } from "sonner";
 
 import {
@@ -9,6 +8,7 @@ import {
   SidebarGroupLabel,
   SidebarMenu,
 } from "@/components/ui/sidebar";
+import { useCurrentChatThreadId } from "@/core/threads/use-current-chat-thread-id";
 import {
   useActiveWorkflows,
   useCancelActiveWorkflow,
@@ -17,8 +17,13 @@ import {
 import { WorkflowRow } from "./workflow-row";
 
 export function ActiveWorkflowsPanel() {
-  const { thread_id: threadId } = useParams<{ thread_id?: string }>();
-  const currentThreadId = threadId ?? null;
+  // Read from a module-singleton store rather than `useParams`. The chat
+  // page may swap "/new" → "/<uuid>" via `history.replaceState` (to avoid
+  // remounting the in-flight stream), and Next.js's `useParams` does not
+  // reflect that swap — it would keep returning literal "new" and we'd
+  // poll the wrong endpoint forever. The chat page publishes its real
+  // thread id via `setCurrentChatThreadId`.
+  const currentThreadId = useCurrentChatThreadId();
 
   const { data = [] } = useActiveWorkflows(currentThreadId);
   const { mutate: cancel, isPending: isCancelling } =

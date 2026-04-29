@@ -28,6 +28,12 @@ export type ThreadStreamOptions = {
   threadId?: string | null | undefined;
   context: LocalSettings["context"];
   isMock?: boolean;
+  // True when this thread is a brand-new client-generated UUID that has
+  // not yet been persisted server-side. We pass the threadId to useStream
+  // unconditionally (so its internal state never transitions mid-stream and
+  // wipes accumulated stream messages), but on a not-yet-existing thread
+  // the SDK's initial state-history fetch would 404 — suppress it.
+  isNewThread?: boolean;
   onStart?: (threadId: string) => void;
   onFinish?: (state: AgentThreadState) => void;
   onToolEnd?: (event: ToolEndEvent) => void;
@@ -139,6 +145,7 @@ export function useThreadStream({
   threadId,
   context,
   isMock,
+  isNewThread,
   onStart,
   onFinish,
   onToolEnd,
@@ -202,6 +209,10 @@ export function useThreadStream({
     runMetadataStorageRef.current = getRunMetadataStorage();
   }
 
+  // `isNewThread` is held in a ref so that flipping it false (after the
+  // server confirms thread creation) does NOT change downstream behavior
+  // mid-stream. We only consult the ref on the first render.
+  const isNewThreadInitialRef = useRef(isNewThread === true);
   const thread = useStream<AgentThreadState>({
     client: getAPIClient(isMock),
     assistantId: "lead_agent",
@@ -591,9 +602,23 @@ export function useThreadStream({
     return [...thread.messages, ...filteredTail, ...optimisticMessages];
   })();
 
+  // Brand-new threads have no server-side state, so the SDK's initial
+  // `getState` 404s and leaves `history.data == null`, which surfaces as
+  // `isThreadLoading: true` for the entire pre-submit lifetime of the
+  // page. That causes MessageList to render a skeleton and ThreadTitle
+  // to display "Loading..." on a blank /new page. The skeleton is only
+  // meaningful for an existing thread whose history hasn't arrived yet,
+  // so suppress it on new threads.
+  const overrides: Partial<typeof thread> = {};
+  if (mergedMessages !== null) {
+    overrides.messages = mergedMessages;
+  }
+  if (isNewThreadInitialRef.current) {
+    overrides.isThreadLoading = false;
+  }
   const mergedThread =
-    mergedMessages !== null
-      ? ({ ...thread, messages: mergedMessages } as typeof thread)
+    Object.keys(overrides).length > 0
+      ? ({ ...thread, ...overrides } as typeof thread)
       : thread;
 
   return [mergedThread, sendMessage, isUploading] as const;

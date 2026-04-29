@@ -2,7 +2,7 @@
 
 import { BotIcon, PlusSquare } from "lucide-react";
 import { useParams, useRouter } from "next/navigation";
-import { useCallback, useState } from "react";
+import { useCallback, useEffect, useState } from "react";
 
 import type { PromptInputMessage } from "@/components/ai-elements/prompt-input";
 import { Button } from "@/components/ui/button";
@@ -27,6 +27,7 @@ import { useModels } from "@/core/models/hooks";
 import { useNotification } from "@/core/notification/hooks";
 import { useThreadSettings } from "@/core/settings";
 import { useThreadStream } from "@/core/threads/hooks";
+import { setCurrentChatThreadId } from "@/core/threads/use-current-chat-thread-id";
 import { textOfMessage } from "@/core/threads/utils";
 import { env } from "@/env";
 import { cn } from "@/lib/utils";
@@ -47,9 +48,17 @@ export default function AgentChatPage() {
   const [settings, setSettings] = useThreadSettings(threadId);
   const { tokenUsageEnabled } = useModels();
 
+  // Publish the current thread id to sidebar widgets — see the comment
+  // on the chats/[thread_id] page for context.
+  useEffect(() => {
+    setCurrentChatThreadId(threadId);
+    return () => setCurrentChatThreadId(null);
+  }, [threadId]);
+
   const { showNotification } = useNotification();
   const [thread, sendMessage] = useThreadStream({
-    threadId: isNewThread ? undefined : threadId,
+    threadId,
+    isNewThread,
     context: { ...settings.context, agent_name: agent_name },
     onStart: (createdThreadId) => {
       setThreadId(createdThreadId);
