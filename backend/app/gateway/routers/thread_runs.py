@@ -114,7 +114,7 @@ async def stream_run(thread_id: str, body: RunCreateRequest, request: Request) -
         sse_consumer(bridge, record, request, run_mgr),
         media_type="text/event-stream",
         headers={
-            "Cache-Control": "no-cache",
+            "Cache-Control": "no-cache, no-transform",
             "Connection": "keep-alive",
             "X-Accel-Buffering": "no",
             # LangGraph Platform includes run metadata in this header.
@@ -218,7 +218,7 @@ async def join_run(thread_id: str, run_id: str, request: Request) -> StreamingRe
         sse_consumer(bridge, record, request, run_mgr),
         media_type="text/event-stream",
         headers={
-            "Cache-Control": "no-cache",
+            "Cache-Control": "no-cache, no-transform",
             "Connection": "keep-alive",
             "X-Accel-Buffering": "no",
         },
@@ -260,7 +260,7 @@ async def stream_existing_run(
         sse_consumer(bridge, record, request, run_mgr),
         media_type="text/event-stream",
         headers={
-            "Cache-Control": "no-cache",
+            "Cache-Control": "no-cache, no-transform",
             "Connection": "keep-alive",
             "X-Accel-Buffering": "no",
         },

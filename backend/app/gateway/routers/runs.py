@@ -48,7 +48,7 @@ async def stateless_stream(body: RunCreateRequest, request: Request) -> Streamin
         sse_consumer(bridge, record, request, run_mgr),
         media_type="text/event-stream",
         headers={
-            "Cache-Control": "no-cache",
+            "Cache-Control": "no-cache, no-transform",
             "Connection": "keep-alive",
             "X-Accel-Buffering": "no",
             "Content-Location": f"/api/threads/{thread_id}/runs/{record.run_id}",
