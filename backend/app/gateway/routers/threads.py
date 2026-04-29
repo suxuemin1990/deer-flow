@@ -246,30 +246,115 @@ def _derive_thread_status(checkpoint_tuple) -> str:
 # ---------------------------------------------------------------------------
 
 
+async def _purge_thread(thread_id: str, store, checkpointer) -> None:
+    """Best-effort full cleanup for a single thread (fs + store + checkpointer).
+
+    Used for both the parent thread being deleted and each of its child
+    workflow threads. Per-step failures are logged and swallowed so a single
+    bad child does not abort the cascade.
+    """
+    # Filesystem.
+    try:
+        _delete_thread_data(thread_id)
+    except HTTPException as exc:
+        # Invalid thread_id (422) or fs failure (500) — log and continue so
+        # cascade keeps going. The parent-level handler validates its own id
+        # via the route.
+        logger.warning(
+            "Cascade cleanup: skipping fs delete for %s (%s)", thread_id, exc.detail
+        )
+    except Exception:
+        logger.debug("Cascade cleanup: fs delete failed for %s", thread_id, exc_info=True)
+
+    # Store record.
+    if store is not None:
+        try:
+            await store.adelete(THREADS_NS, thread_id)
+        except Exception:
+            logger.debug(
+                "Cascade cleanup: store delete failed for %s (not critical)", thread_id
+            )
+
+    # Checkpointer.
+    if checkpointer is not None and hasattr(checkpointer, "adelete_thread"):
+        try:
+            await checkpointer.adelete_thread(thread_id)
+        except Exception:
+            logger.debug(
+                "Cascade cleanup: checkpoint delete failed for %s (not critical)",
+                thread_id,
+            )
+
+
+def _extract_child_thread_ids(metadata: dict | None) -> list[str]:
+    """Pull child workflow thread ids from a parent record's metadata.
+
+    Tolerates malformed entries (non-dict, missing thread_id) silently — same
+    contract as ``_filter_workflow_child_threads`` in /threads/search.
+    """
+    if not metadata:
+        return []
+    children = metadata.get("child_workflow_threads")
+    if not isinstance(children, list):
+        return []
+    out: list[str] = []
+    for entry in children:
+        if not isinstance(entry, dict):
+            continue
+        tid = entry.get("thread_id")
+        if isinstance(tid, str) and tid:
+            out.append(tid)
+    return out
+
+
 @router.delete("/{thread_id}", response_model=ThreadDeleteResponse)
 async def delete_thread_data(thread_id: str, request: Request) -> ThreadDeleteResponse:
-    """Delete local persisted filesystem data for a thread.
+    """Delete a thread and all of its child workflow threads.
 
-    Cleans DeerFlow-managed thread directories, removes checkpoint data,
-    and removes the thread record from the Store.
+    Cleans DeerFlow-managed thread directories, removes checkpoint data, and
+    removes the thread record from the Store — for the parent thread *and*
+    for every child listed in the parent's ``metadata.child_workflow_threads``.
+
+    Without the cascade, child workflow threads (which are filtered out of
+    /threads/search by design) become invisible orphans on disk and in the
+    checkpointer.
     """
-    # Clean local filesystem
+    store = get_store(request)
+    checkpointer = getattr(request.app.state, "checkpointer", None)
+
+    # Read parent metadata BEFORE deleting it so we know which children
+    # to cascade into.
+    child_ids: list[str] = []
+    if store is not None:
+        try:
+            record = await _store_get(store, thread_id)
+        except Exception:
+            logger.debug(
+                "Cascade cleanup: failed to read parent record %s", thread_id, exc_info=True
+            )
+            record = None
+        child_ids = _extract_child_thread_ids((record or {}).get("metadata"))
+
+    # Clean parent fs first — this validates the thread_id (raises 422 on
+    # path-traversal attempts) so callers get a clear error before we touch
+    # store / checkpointer / children.
     response = _delete_thread_data(thread_id)
 
-    # Remove from Store (best-effort)
-    store = get_store(request)
+    # Cascade into children (best-effort).
+    for child_id in child_ids:
+        await _purge_thread(child_id, store, checkpointer)
+
+    # Remove parent's own store record (best-effort).
     if store is not None:
         try:
             await store.adelete(THREADS_NS, thread_id)
         except Exception:
             logger.debug("Could not delete store record for thread %s (not critical)", thread_id)
 
-    # Remove checkpoints (best-effort)
-    checkpointer = getattr(request.app.state, "checkpointer", None)
-    if checkpointer is not None:
+    # Remove parent's checkpoints (best-effort).
+    if checkpointer is not None and hasattr(checkpointer, "adelete_thread"):
         try:
-            if hasattr(checkpointer, "adelete_thread"):
-                await checkpointer.adelete_thread(thread_id)
+            await checkpointer.adelete_thread(thread_id)
         except Exception:
             logger.debug("Could not delete checkpoints for thread %s (not critical)", thread_id)
 
