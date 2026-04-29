@@ -136,6 +136,12 @@ class ThreadStateUpdateRequest(BaseModel):
     as_node: str | None = Field(default=None, description="Node identity for the update")
 
 
+class WorkflowMessageBody(BaseModel):
+    """Request body for POST /threads/{p}/workflows/{c}/messages."""
+
+    content: str = Field(..., min_length=1, max_length=10000)
+
+
 class HistoryEntry(BaseModel):
     """Single checkpoint history entry."""
 
@@ -765,6 +771,36 @@ async def cancel_active_workflow(
         # Task surfaced an exception out of its own cleanup — already logged
         # by run_workflow_background; safe to swallow here.
         pass
+    return {"ok": True}
+
+
+@router.post("/{thread_id}/workflows/{child_id}/messages")
+async def post_workflow_message(
+    thread_id: str,
+    child_id: str,
+    body: WorkflowMessageBody,
+    request: Request,
+) -> dict:
+    """Append a HumanMessage to a workflow child thread's messages channel.
+
+    User-driven injection from the Workflow Hub UI. Mirrors the
+    ``inject_hint`` tool's effect — both write through the same helper.
+    Returns 404 if ``child_id`` is not a platform-registered workflow
+    thread; the parent ``thread_id`` is currently informational (kept in
+    the URL for future per-parent authorization checks).
+    """
+    from deerflow.workflows import emit as emit_mod
+    from deerflow.workflows.tools import _THREAD_TO_WORKFLOW
+
+    if child_id not in _THREAD_TO_WORKFLOW:
+        raise HTTPException(
+            status_code=404,
+            detail=f"child_id={child_id!r} is not a registered workflow thread",
+        )
+    cp = get_checkpointer(request)
+    await emit_mod.inject_user_message_to_workflow(
+        child_id, body.content, checkpointer=cp,
+    )
     return {"ok": True}
 
 
