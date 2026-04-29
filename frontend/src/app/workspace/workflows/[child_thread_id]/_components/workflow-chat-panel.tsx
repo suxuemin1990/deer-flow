@@ -42,6 +42,33 @@ export function WorkflowChatPanel({ parentThreadId, workflow }: Props) {
   const [draft, setDraft] = useState("");
   const listRef = useRef<HTMLDivElement>(null);
 
+  // Optimistic local pending hints. Appear immediately on send; clear
+  // when an equivalent server message arrives via polling. Match by
+  // exact content + role==human; not perfect (rapid duplicates would
+  // collapse) but the running-workflow inject path is human-paced.
+  const [pendingHints, setPendingHints] = useState<
+    { id: string; content: string; pushedAtCount: number }[]
+  >([]);
+
+  // Drop pending hints once the server confirms them. We compare only
+  // against messages that arrived AFTER the hint was pushed, so a user
+  // re-sending content that already exists in history doesn't get an
+  // instantly-dropped pending bubble.
+  useEffect(() => {
+    if (pendingHints.length === 0) return;
+    setPendingHints((prev) =>
+      prev.filter((p) => {
+        for (let i = p.pushedAtCount; i < messages.length; i++) {
+          const m = messages[i];
+          if (m?.role === "human" && m?.content === p.content) {
+            return false; // drop
+          }
+        }
+        return true; // keep
+      }),
+    );
+  }, [messages, pendingHints.length]);
+
   // Autoscroll to bottom on new messages
   useEffect(() => {
     const el = listRef.current;
@@ -158,6 +185,20 @@ export function WorkflowChatPanel({ parentThreadId, workflow }: Props) {
             </div>
           );
         })}
+        {pendingHints.map((p) => (
+          <div
+            key={`pending-${p.id}`}
+            className="flex justify-end"
+            data-testid="pending-hint-bubble"
+          >
+            <div className="bg-primary text-primary-foreground max-w-[80%] rounded-lg px-3 py-2 text-sm opacity-60">
+              <div className="whitespace-pre-wrap">{p.content}</div>
+              <div className="mt-1 flex justify-end gap-0.5 opacity-70">
+                <span className="text-xs">sending…</span>
+              </div>
+            </div>
+          </div>
+        ))}
       </div>
 
       {/* Input */}
@@ -175,8 +216,17 @@ export function WorkflowChatPanel({ parentThreadId, workflow }: Props) {
             onKeyDown={(e) => {
               if (e.key === "Enter" && !e.shiftKey) {
                 e.preventDefault();
-                if (draft.trim()) {
-                  send(draft.trim());
+                const text = draft.trim();
+                if (text) {
+                  send(text);
+                  setPendingHints((prev) => [
+                    ...prev,
+                    {
+                      id: crypto.randomUUID(),
+                      content: text,
+                      pushedAtCount: messages.length,
+                    },
+                  ]);
                   setDraft("");
                 }
               }
@@ -186,8 +236,17 @@ export function WorkflowChatPanel({ parentThreadId, workflow }: Props) {
           <Button
             disabled={terminal || isSending || !draft.trim()}
             onClick={() => {
-              if (draft.trim()) {
-                send(draft.trim());
+              const text = draft.trim();
+              if (text) {
+                send(text);
+                setPendingHints((prev) => [
+                  ...prev,
+                  {
+                    id: crypto.randomUUID(),
+                    content: text,
+                    pushedAtCount: messages.length,
+                  },
+                ]);
                 setDraft("");
               }
             }}
