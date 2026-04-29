@@ -13,6 +13,8 @@ import {
   type WorkflowMessage,
 } from "@/core/workflows/use-workflow-chat";
 
+import { ProgressTimeline } from "./progress-timeline";
+
 interface Props {
   parentThreadId: string;
   workflow: WorkflowEntry;
@@ -35,7 +37,7 @@ function ackFor(
 }
 
 export function WorkflowChatPanel({ parentThreadId, workflow }: Props) {
-  const { messages, isLoading, send, isSending } = useWorkflowChat(
+  const { messages, isLoading, send, isSending, progress } = useWorkflowChat(
     parentThreadId,
     workflow.child_thread_id,
   );
@@ -123,6 +125,15 @@ export function WorkflowChatPanel({ parentThreadId, workflow }: Props) {
           </Button>
         )}
       </div>
+
+      {/* Progress timeline (only when spec declares fields) */}
+      {workflow.progress_timeline_fields &&
+        workflow.progress_timeline_fields.length > 0 && (
+          <ProgressTimeline
+            values={progress}
+            fields={workflow.progress_timeline_fields}
+          />
+        )}
 
       {/* Terminal summary card */}
       {terminal && (
