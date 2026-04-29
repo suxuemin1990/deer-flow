@@ -18,7 +18,7 @@ alternative (passing schema in from every caller) buys nothing today.
 
 from __future__ import annotations
 
-from langchain_core.messages import SystemMessage
+from langchain_core.messages import AIMessage
 from langgraph.checkpoint.base import BaseCheckpointSaver
 from langgraph.graph import END, START, StateGraph
 
@@ -44,7 +44,16 @@ async def emit_to_parent_thread(
     *,
     checkpointer: BaseCheckpointSaver,
 ) -> None:
-    """Append a SystemMessage to the parent thread's checkpoint.
+    """Append an AIMessage to the parent thread's checkpoint.
+
+    Why AIMessage and not SystemMessage:
+        - The frontend's groupMessages() only renders human/tool/ai message
+          types; system messages are silently dropped.
+        - Message-channel forwarders (Slack/Discord/Feishu) treat assistant
+          content as the natural "agent reply" payload.
+        - Workflow completion notices semantically belong to the agent's
+          turn — the agent is the one telling the user "the workflow you
+          asked for finished and here's the report".
 
     Note:
         LangGraph's ``aupdate_state`` silently creates a fresh checkpoint
@@ -55,5 +64,5 @@ async def emit_to_parent_thread(
     appender = _build_message_appender(checkpointer)
     await appender.aupdate_state(
         config={"configurable": {"thread_id": parent_thread_id}},
-        values={"messages": [SystemMessage(content=content)]},
+        values={"messages": [AIMessage(content=content)]},
     )

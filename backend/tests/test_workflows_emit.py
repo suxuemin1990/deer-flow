@@ -6,8 +6,15 @@ import pytest
 
 
 @pytest.mark.asyncio
-async def test_emit_appends_system_message_to_parent_thread():
-    from langchain_core.messages import HumanMessage
+async def test_emit_appends_ai_message_so_frontend_renders_it():
+    """Emit must produce an AIMessage, not SystemMessage.
+
+    The frontend's groupMessages() in core/messages/utils.ts only handles
+    type ∈ {human, tool, ai}. SystemMessage (type='system') is silently
+    dropped from rendering. AIMessage also matches what message-channel
+    forwarders (Slack/Discord/Feishu) expect for assistant-side content.
+    """
+    from langchain_core.messages import AIMessage, HumanMessage
     from langgraph.checkpoint.memory import InMemorySaver
     from langgraph.graph import END, START, MessagesState, StateGraph
 
@@ -31,8 +38,15 @@ async def test_emit_appends_system_message_to_parent_thread():
     )
 
     state = await parent_graph.aget_state(cfg)
-    contents = [m.content for m in state.values["messages"]]
+    messages = state.values["messages"]
+    contents = [m.content for m in messages]
     assert "[workflow:demo] done" in contents
+
+    emitted = next(m for m in messages if m.content == "[workflow:demo] done")
+    assert isinstance(emitted, AIMessage), (
+        f"emit must produce AIMessage so frontend renders it; got {type(emitted).__name__}"
+    )
+    assert emitted.type == "ai"
 
 
 @pytest.mark.asyncio
