@@ -1,6 +1,8 @@
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { useEffect, useRef } from "react";
 
+import { bumpThreadReloadTick } from "../threads/use-thread-reload-tick";
+
 import { cancelActiveWorkflow, fetchActiveWorkflows } from "./api";
 import type { WorkflowProgressItem } from "./types";
 
@@ -25,6 +27,10 @@ export function useActiveWorkflows(threadId: string | null) {
   // invalidate the chat-list cache so its
   // metadata.recent_workflow_finish_at is refetched and the red-dot
   // machinery can light up without waiting for the next chat-list refresh.
+  // Also bump the thread reload tick so the currently-open chat page
+  // re-fetches its checkpoint state and surfaces the workflow's
+  // emitted message (the LangGraph SDK's useStream does not refetch on
+  // out-of-band state changes — workflow emit happens after parent idle).
   const prevCountRef = useRef<number | null>(null);
   useEffect(() => {
     const len = query.data?.length ?? null;
@@ -34,9 +40,10 @@ export function useActiveWorkflows(threadId: string | null) {
       len < prevCountRef.current
     ) {
       void queryClient.invalidateQueries({ queryKey: ["threads", "search"] });
+      if (threadId) bumpThreadReloadTick(threadId);
     }
     prevCountRef.current = len;
-  }, [query.data, queryClient]);
+  }, [query.data, queryClient, threadId]);
 
   return query;
 }

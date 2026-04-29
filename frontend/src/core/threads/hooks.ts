@@ -17,6 +17,7 @@ import type { UploadedFileInfo } from "../uploads";
 import { promptInputFilePartToFile, uploadFiles } from "../uploads";
 
 import type { AgentThread, AgentThreadState } from "./types";
+import { useThreadReloadTick } from "./use-thread-reload-tick";
 
 export type ToolEndEvent = {
   name: string;
@@ -303,6 +304,17 @@ export function useThreadStream({
   // Track message count before sending so we know when server has responded
   const prevMsgCountRef = useRef(thread.messages.length);
 
+  // Tail messages emitted to the parent thread out-of-band — typically a
+  // workflow finish/cancel report written via aupdate_state by the
+  // background runner after the parent's normal stream has closed.
+  // useStream does not refetch on its own in that case, so when the
+  // workflow widget detects an active workflow finished
+  // (`bumpThreadReloadTick`) we fetch the latest state and append any
+  // new messages here. They are deduped against `thread.messages` at
+  // render time so the next normal stream cleanly takes over.
+  const [tailMessages, setTailMessages] = useState<Message[]>([]);
+  const reloadTick = useThreadReloadTick(threadId ?? null);
+
   // Reset thread-local pending UI state when switching between threads so
   // optimistic messages and in-flight guards do not leak across chat views.
   useEffect(() => {
@@ -310,6 +322,7 @@ export function useThreadStream({
     sendInFlightRef.current = false;
     prevMsgCountRef.current = 0;
     setOptimisticMessages([]);
+    setTailMessages([]);
     setIsUploading(false);
   }, [threadId]);
 
@@ -322,6 +335,49 @@ export function useThreadStream({
       setOptimisticMessages([]);
     }
   }, [thread.messages.length, optimisticMessages.length]);
+
+  // Out-of-band reload: when the workflow widget detects an active
+  // workflow finished, the corresponding emit landed in the parent
+  // thread's checkpoint after useStream's last fetch. Pull fresh state
+  // from the gateway and append any messages we haven't already seen.
+  useEffect(() => {
+    if (!threadId || reloadTick === 0 || isMock) return;
+    let cancelled = false;
+    void (async () => {
+      try {
+        const state = await getAPIClient(isMock).threads.getState<
+          AgentThreadState
+        >(threadId);
+        if (cancelled) return;
+        const fresh = state?.values?.messages ?? [];
+        if (fresh.length === 0) return;
+        const seen = new Set<string>();
+        for (const m of thread.messages) {
+          if (m.id) seen.add(m.id);
+        }
+        const additions = fresh.filter((m) => m.id && !seen.has(m.id));
+        if (additions.length === 0) return;
+        setTailMessages((prev) => {
+          const prevIds = new Set(prev.map((m) => m.id).filter(Boolean));
+          const merged = [...prev];
+          for (const m of additions) {
+            if (m.id && !prevIds.has(m.id)) merged.push(m);
+          }
+          return merged;
+        });
+      } catch {
+        // Best-effort: a failed refetch just leaves the user without the
+        // out-of-band message until the next stream/reload — same as the
+        // pre-fix behavior, so silently degrade.
+      }
+    })();
+    return () => {
+      cancelled = true;
+    };
+    // thread.messages is intentionally not a dep: the effect runs once
+    // per tick bump and reads thread.messages from closure for dedup.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [threadId, reloadTick, isMock]);
 
   const sendMessage = useCallback(
     async (
@@ -518,13 +574,26 @@ export function useThreadStream({
     [thread, _handleOnStart, t.uploads.uploadingFiles, context, queryClient],
   );
 
-  // Merge thread with optimistic messages for display
+  // Merge thread with optimistic + tail messages for display.
+  // Tail messages are deduped by id against thread.messages so once the
+  // normal stream re-fetches them we don't render duplicates.
+  const mergedMessages = (() => {
+    const seenIds = new Set<string>();
+    for (const m of thread.messages) {
+      if (m.id) seenIds.add(m.id);
+    }
+    const filteredTail = tailMessages.filter(
+      (m) => !m.id || !seenIds.has(m.id),
+    );
+    if (optimisticMessages.length === 0 && filteredTail.length === 0) {
+      return null;
+    }
+    return [...thread.messages, ...filteredTail, ...optimisticMessages];
+  })();
+
   const mergedThread =
-    optimisticMessages.length > 0
-      ? ({
-          ...thread,
-          messages: [...thread.messages, ...optimisticMessages],
-        } as typeof thread)
+    mergedMessages !== null
+      ? ({ ...thread, messages: mergedMessages } as typeof thread)
       : thread;
 
   return [mergedThread, sendMessage, isUploading] as const;
