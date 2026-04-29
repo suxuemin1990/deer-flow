@@ -134,16 +134,13 @@ async def inject_hint(
     hint: str,
     tool_call_id: Annotated[str, InjectedToolCallId],
 ) -> Command:
-    """Append a free-text hint to a running workflow's inbox (non-blocking).
+    """Inject a free-text instruction into a running workflow's chat channel.
 
-    The workflow decides when (and whether) to consume the hint. Multiple
-    hints accumulate in order until the workflow drains them.
-
-    Hints are kept in an in-process inbox (see
-    :mod:`deerflow.workflows.hints_inbox`), NOT in the workflow's checkpoint
-    state. Writing them to checkpoint state would race with the running
-    Pregel's in-memory channels: the next node tick writes a sibling
-    checkpoint that overwrites the inject and the hint is silently lost.
+    The hint is appended to the workflow's ``messages`` channel as a
+    HumanMessage. Workflow nodes consume it on their next tick (typically
+    by feeding it into their inner LLM, which decides how to react).
+    Workflows that do not declare ``accepts_chat=True`` will silently drop
+    the message.
 
     Args:
         thread_id: child thread_id returned by start_workflow.
@@ -157,9 +154,10 @@ async def inject_hint(
             tool_call_id,
         )
     name = _THREAD_TO_WORKFLOW[thread_id]
-    from deerflow.workflows.hints_inbox import push_hint
+    from deerflow.workflows.emit import inject_user_message_to_workflow
 
-    await push_hint(thread_id, hint)
+    cp = get_default_checkpointer()
+    await inject_user_message_to_workflow(thread_id, hint, checkpointer=cp)
     return _tool_msg(f"Hint injected into {name!r} (thread_id={thread_id}).", tool_call_id)
 
 
@@ -217,13 +215,10 @@ async def get_workflow_progress(
     state = await graph.aget_state({"configurable": {"thread_id": thread_id}})
     values = state.values or {}
 
-    from deerflow.workflows.hints_inbox import peek_hints
-
     payload: dict[str, Any] = {
         "workflow": name,
         "thread_id": thread_id,
         spec.done_field: values.get(spec.done_field, False),
-        "_hints": await peek_hints(thread_id),
         "_error": values.get("_error"),
     }
     for fname in spec.progress_fields:

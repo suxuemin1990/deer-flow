@@ -201,13 +201,16 @@ async def test_inject_hint_writes_to_inbox(monkeypatch):
         )
         assert "inject" in result.update["messages"][0].content.lower()
 
-        # Hints live in a process-local inbox, NOT in the running graph's
-        # checkpoint state — writing to checkpoint state would be overwritten
-        # by the next pregel tick and silently lost. Verify the inbox.
-        from deerflow.workflows.hints_inbox import peek_hints, reset_inbox
-
-        assert "try smaller lr" in await peek_hints(child_tid)
-        reset_inbox()
+        # Hint lands as a HumanMessage in the child workflow's messages
+        # channel — verify via the same checkpointer.
+        from deerflow.workflows.demo_flow import make_graph
+        graph = make_graph(checkpointer=saver)
+        st = await graph.aget_state({"configurable": {"thread_id": child_tid}})
+        msgs = st.values.get("messages") or []
+        from langchain_core.messages import HumanMessage as _HM
+        assert any(
+            isinstance(m, _HM) and "try smaller lr" in m.content for m in msgs
+        ), f"expected HumanMessage with hint in child state; got {msgs!r}"
 
         # Cancel the running task so the test exits cleanly
         if child_tid in tools_mod._BG_TASKS:
@@ -528,3 +531,37 @@ async def test_start_workflow_appends_child_to_parent_metadata(monkeypatch):
     finally:
         reset_default_store()
         reset_default_checkpointer()
+
+
+@pytest.mark.asyncio
+async def test_inject_hint_writes_human_message_via_messages_channel(monkeypatch):
+    """inject_hint must call inject_user_message_to_workflow, not push_hint."""
+    import deerflow.workflows.tools as wftools
+    from deerflow.workflows.tools import inject_hint
+
+    monkeypatch.setattr(
+        wftools, "_THREAD_TO_WORKFLOW", {"c": "demo-flow"}, raising=False,
+    )
+
+    captured: dict = {}
+    async def fake_inject(child_tid, content, *, checkpointer):
+        captured["child_tid"] = child_tid
+        captured["content"] = content
+
+    import deerflow.workflows.emit as emit_mod
+    monkeypatch.setattr(emit_mod, "inject_user_message_to_workflow", fake_inject)
+
+    # Also stub get_default_checkpointer so the tool's import succeeds
+    monkeypatch.setattr(wftools, "get_default_checkpointer", lambda: object())
+
+    result = await inject_hint.ainvoke({
+        "name": "inject_hint",
+        "args": {"thread_id": "c", "hint": "use dropout"},
+        "id": "tc-1",
+        "type": "tool_call",
+    })
+
+    assert captured == {"child_tid": "c", "content": "use dropout"}
+    # Verify return Command still has a ToolMessage
+    msg = result.update["messages"][0]
+    assert "demo-flow" in msg.content
