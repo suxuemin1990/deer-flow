@@ -116,6 +116,7 @@ async def list_all_workflows(request: Request) -> dict:
                     "started_at": entry.get("started_at"),
                     "finished_at": None,
                     "progress": {},
+                    "progress_timeline_fields": [],
                     "report_preview": None,
                     "error": "workflow spec not registered",
                 })
@@ -157,6 +158,7 @@ async def list_all_workflows(request: Request) -> dict:
                     else (record.get("updated_at") or entry.get("started_at"))
                 ),
                 "progress": progress,
+                "progress_timeline_fields": list(spec.progress_timeline_fields),
                 "report_preview": _truncate(report, _REPORT_PREVIEW_LEN),
                 "error": _truncate(error, _ERROR_PREVIEW_LEN),
             })

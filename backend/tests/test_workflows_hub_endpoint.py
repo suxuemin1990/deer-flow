@@ -72,6 +72,7 @@ async def test_workflows_hub_returns_parents_with_their_children():
         factory=lambda **k: None, input_schema=_IS,
         done_field="is_done", report_field="report_markdown",
         progress_fields=["current_round", "max_rounds"],
+        progress_timeline_fields=["history"],
     )
     fake_reg = WorkflowRegistry([spec], [])
     wftools._REGISTRY = fake_reg
@@ -92,6 +93,10 @@ async def test_workflows_hub_returns_parents_with_their_children():
     assert by_id["c1"]["report_preview"].startswith("## Report")
     assert by_id["c2"]["status"] == "running"
     assert by_id["c2"]["progress"] == {"current_round": 1, "max_rounds": 3}
+    # progress_timeline_fields is forwarded so the detail page can render
+    # its timeline panel without a separate spec lookup.
+    assert by_id["c1"]["progress_timeline_fields"] == ["history"]
+    assert by_id["c2"]["progress_timeline_fields"] == ["history"]
 
 
 @pytest.mark.asyncio
