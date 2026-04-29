@@ -7,6 +7,7 @@ This directory contains detailed documentation for the DeerFlow backend.
 | Document | Description |
 |----------|-------------|
 | [ARCHITECTURE.md](ARCHITECTURE.md) | System architecture overview |
+| [TYPES_AND_ENTITIES.md](TYPES_AND_ENTITIES.md) | 类型与实体导览(中文):ThreadState / Run / Subagent / Skill / MCP / AppConfig 等核心模型 |
 | [API.md](API.md) | Complete API reference |
 | [CONFIGURATION.md](CONFIGURATION.md) | Configuration options |
 | [SETUP.md](SETUP.md) | Quick setup guide |
