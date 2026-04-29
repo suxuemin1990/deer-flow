@@ -1,4 +1,5 @@
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
+import { useEffect, useRef } from "react";
 
 import { cancelActiveWorkflow, fetchActiveWorkflows } from "./api";
 import type { WorkflowProgressItem } from "./types";
@@ -6,7 +7,8 @@ import type { WorkflowProgressItem } from "./types";
 const POLL_INTERVAL_MS = 2_000;
 
 export function useActiveWorkflows(threadId: string | null) {
-  return useQuery<WorkflowProgressItem[]>({
+  const queryClient = useQueryClient();
+  const query = useQuery<WorkflowProgressItem[]>({
     queryKey: ["workflows", "active", threadId],
     queryFn: async ({ signal }) => {
       if (!threadId) return [];
@@ -18,6 +20,25 @@ export function useActiveWorkflows(threadId: string | null) {
     refetchIntervalInBackground: false,
     initialData: threadId ? undefined : [],
   });
+
+  // When the active-workflow list shrinks (a workflow just finished),
+  // invalidate the chat-list cache so its
+  // metadata.recent_workflow_finish_at is refetched and the red-dot
+  // machinery can light up without waiting for the next chat-list refresh.
+  const prevCountRef = useRef<number | null>(null);
+  useEffect(() => {
+    const len = query.data?.length ?? null;
+    if (
+      prevCountRef.current !== null &&
+      len !== null &&
+      len < prevCountRef.current
+    ) {
+      void queryClient.invalidateQueries({ queryKey: ["threads", "search"] });
+    }
+    prevCountRef.current = len;
+  }, [query.data, queryClient]);
+
+  return query;
 }
 
 export function useCancelActiveWorkflow(parentThreadId: string | null) {
