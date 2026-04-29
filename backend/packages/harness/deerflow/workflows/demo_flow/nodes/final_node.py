@@ -2,8 +2,9 @@
 
 History entries are heterogeneous: ``{"round", "score"}`` (one per round
 from poll_wait_node) plus optional ``{"round", "hints": [...]}`` entries
-injected by work_loop_node when hints land mid-run. The report only tables
-score-bearing entries; non-scored entries are filtered out.
+contributed by work_loop_node when injected HumanMessages land mid-run.
+The report only tables score-bearing entries; non-scored entries are
+filtered out.
 """
 
 

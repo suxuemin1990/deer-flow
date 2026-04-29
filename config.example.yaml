@@ -987,13 +987,17 @@ workflows:
     description: |
       Zero-LLM demo pipeline used to validate the workflow platform end-to-end.
       Pretends to run training rounds and produces a small markdown report.
-      Useful for testing inject_hint / cancel_workflow / get_workflow_progress
-      without spending real model tokens.
+      Useful for testing workflow chat injection / cancel_workflow /
+      get_workflow_progress without spending real model tokens.
     factory: deerflow.workflows.demo_flow:make_graph
     input_schema: deerflow.workflows.demo_flow:DemoFlowInput
     done_field: is_done
     report_field: report_markdown
     progress_fields: [current_round, max_rounds, history]
+    accepts_chat: true
     hint_behavior_doc: |
-      Demo-only — the graph stores hints in _hints but does not consume
-      them (no LLM nodes). Use this workflow only to verify the platform.
+      Demo-only — work_loop_node consumes new HumanMessages from the
+      messages channel and stamps their content into history. The graph
+      has no LLM nodes, so it does not produce AIMessage replies; the
+      Workflow Hub UI surfaces ✓ (delivered) and ✓✓ (consumed, when
+      progress fields advance).

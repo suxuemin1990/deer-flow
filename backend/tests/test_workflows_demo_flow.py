@@ -65,17 +65,22 @@ async def test_work_loop_signals_done_at_max():
 
 
 @pytest.mark.asyncio
-async def test_work_loop_drains_hints_inbox_into_history():
-    """Hints pushed via inject_hint surface in the next round's history."""
-    from deerflow.workflows.demo_flow.nodes.work_loop_node import work_loop_node
-    from deerflow.workflows.hints_inbox import push_hint, reset_inbox
+async def test_work_loop_consumes_new_human_messages_into_history():
+    """New HumanMessages on state['messages'] surface in the next round's history."""
+    from langchain_core.messages import HumanMessage
 
-    reset_inbox()
-    await push_hint("child-tid-1", "go faster")
-    await push_hint("child-tid-1", "skip step 3")
+    from deerflow.workflows.demo_flow.nodes.work_loop_node import work_loop_node
 
     out = await work_loop_node(
-        {"task_name": "x", "max_rounds": 3, "current_round": 0},
+        {
+            "task_name": "x",
+            "max_rounds": 3,
+            "current_round": 0,
+            "messages": [
+                HumanMessage(content="go faster", id="m1"),
+                HumanMessage(content="skip step 3", id="m2"),
+            ],
+        },
         config={"configurable": {"thread_id": "child-tid-1"}},
     )
 
@@ -83,14 +88,13 @@ async def test_work_loop_drains_hints_inbox_into_history():
     assert out["history"] == [
         {"round": 1, "hints": ["go faster", "skip step 3"]}
     ]
+    assert out["_seen_msg_ids"] == {"m1", "m2"}
 
 
 @pytest.mark.asyncio
 async def test_work_loop_no_history_entry_when_no_hints():
     from deerflow.workflows.demo_flow.nodes.work_loop_node import work_loop_node
-    from deerflow.workflows.hints_inbox import reset_inbox
 
-    reset_inbox()
     out = await work_loop_node(
         {"task_name": "x", "max_rounds": 3, "current_round": 0},
         config={"configurable": {"thread_id": "child-tid-empty"}},

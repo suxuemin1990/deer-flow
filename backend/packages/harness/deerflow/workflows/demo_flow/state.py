@@ -4,7 +4,7 @@ from __future__ import annotations
 
 from typing import Annotated, NotRequired
 
-from deerflow.workflows.base_state import WorkflowBaseState
+from deerflow.workflows.base_state import WorkflowBaseState, WorkflowChatStateMixin
 
 
 def _merge_list(existing: list | None, new: list | None) -> list:
@@ -15,7 +15,7 @@ def _merge_list(existing: list | None, new: list | None) -> list:
     return existing + new
 
 
-class DemoFlowState(WorkflowBaseState):
+class DemoFlowState(WorkflowBaseState, WorkflowChatStateMixin):
     task_name: str
     max_rounds: int
     current_round: NotRequired[int]
