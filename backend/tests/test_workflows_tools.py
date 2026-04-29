@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import asyncio
+import re
 
 import pytest
 
@@ -189,7 +190,7 @@ async def test_inject_hint_writes_to_inbox(monkeypatch):
         )
         msg = start_result.update["messages"][0].content
         # Extract child_thread_id from the success message
-        child_tid = msg.split("thread_id=")[1].split(".")[0].strip()
+        child_tid = re.search(r"thread_id=([0-9a-f-]+)", msg).group(1)
 
         result = await inject_hint.ainvoke(
             {
@@ -303,7 +304,7 @@ async def test_cancel_workflow_cancels_task_and_writes_error(monkeypatch):
             config={"configurable": {"thread_id": parent_tid}},
         )
         msg = start_result.update["messages"][0].content
-        child_tid = msg.split("thread_id=")[1].split(".")[0].strip()
+        child_tid = re.search(r"thread_id=([0-9a-f-]+)", msg).group(1)
 
         # Let the workflow enter a poll_wait sleep before cancelling.
         await asyncio.sleep(0.3)
@@ -419,7 +420,7 @@ async def test_get_workflow_progress_returns_platform_and_progress_fields(monkey
             config={"configurable": {"thread_id": parent_tid}},
         )
         msg = start_result.update["messages"][0].content
-        child_tid = msg.split("thread_id=")[1].split(".")[0].strip()
+        child_tid = re.search(r"thread_id=([0-9a-f-]+)", msg).group(1)
 
         # Wait for the bg task to finish
         if child_tid in tools_mod._BG_TASKS:
@@ -515,7 +516,7 @@ async def test_start_workflow_appends_child_to_parent_metadata(monkeypatch):
             config={"configurable": {"thread_id": parent_tid}},
         )
         msg = result.update["messages"][0].content
-        child_tid = msg.split("thread_id=")[1].split(".")[0].strip()
+        child_tid = re.search(r"thread_id=([0-9a-f-]+)", msg).group(1)
 
         # Wait for bg task to complete (uses _noop sleep so it's fast)
         if child_tid in tools_mod._BG_TASKS:
@@ -565,3 +566,58 @@ async def test_inject_hint_writes_human_message_via_messages_channel(monkeypatch
     # Verify return Command still has a ToolMessage
     msg = result.update["messages"][0]
     assert "demo-flow" in msg.content
+
+
+@pytest.mark.asyncio
+async def test_start_workflow_tool_message_carries_workflow_link_payload(monkeypatch):
+    """The ToolMessage returned by start_workflow must carry an
+    additional_kwargs.workflow_link payload so the frontend can render
+    a clickable card."""
+    from deerflow.runtime.checkpointer_singleton import reset_default_checkpointer
+    from deerflow.workflows import tools as tools_mod
+    from deerflow.workflows.tools import start_workflow
+
+    _setup_registry_and_checkpointer(monkeypatch)
+
+    # Stub run_workflow_background so no real task starts
+    async def fake_run(**kwargs):
+        return None
+
+    monkeypatch.setattr(tools_mod, "run_workflow_background", fake_run)
+
+    # Stub _record_child_workflow_thread to a no-op
+    async def fake_record(*a, **k):
+        return None
+
+    monkeypatch.setattr(tools_mod, "_record_child_workflow_thread", fake_record)
+
+    try:
+        result = await start_workflow.ainvoke(
+            {
+                "name": "start_workflow",
+                "args": {
+                    "name": "demo-flow",
+                    "params": {"task_name": "x", "max_rounds": 2},
+                },
+                "id": "tc-link",
+                "type": "tool_call",
+            },
+            config={"configurable": {"thread_id": "parent-link"}},
+        )
+
+        msg = result.update["messages"][0]
+        payload = msg.additional_kwargs
+        assert payload.get("element") == "workflow_link", (
+            f"expected element='workflow_link' for frontend dispatch, got "
+            f"additional_kwargs={payload!r}"
+        )
+        link = payload.get("workflow_link")
+        assert isinstance(link, dict)
+        assert link["name"] == "demo-flow"
+        assert link["child_thread_id"]
+        assert link["url"] == f"/workspace/workflows/{link['child_thread_id']}"
+
+        # Text content must still mention the hub for non-rich-UI clients
+        assert "工作流中心" in msg.content or "Workflow Hub" in msg.content
+    finally:
+        reset_default_checkpointer()

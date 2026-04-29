@@ -51,8 +51,18 @@ def _get_registry() -> WorkflowRegistry:
     return _REGISTRY
 
 
-def _tool_msg(content: str, tool_call_id: str) -> Command:
-    return Command(update={"messages": [ToolMessage(content=content, tool_call_id=tool_call_id)]})
+def _tool_msg(
+    content: str,
+    tool_call_id: str,
+    *,
+    additional_kwargs: dict[str, Any] | None = None,
+) -> Command:
+    msg = ToolMessage(
+        content=content,
+        tool_call_id=tool_call_id,
+        additional_kwargs=additional_kwargs or {},
+    )
+    return Command(update={"messages": [msg]})
 
 
 def _parent_thread_id_from_config(config: RunnableConfig | None) -> str | None:
@@ -121,10 +131,22 @@ async def start_workflow(
 
     await _record_child_workflow_thread(parent_tid, child_tid, name)
 
+    text = (
+        f"已为你启动工作流 {name!r}（thread_id={child_tid}）。\n"
+        f"你可以在「工作流中心」(/workspace/workflows)查看进度并直接给它发送提示。\n"
+        f"也可以使用 get_workflow_progress / inject_hint / cancel_workflow 工具。"
+    )
     return _tool_msg(
-        f"Started workflow {name!r}; thread_id={child_tid}. "
-        f"Use get_workflow_progress / inject_hint / cancel_workflow to control it.",
+        text,
         tool_call_id,
+        additional_kwargs={
+            "element": "workflow_link",
+            "workflow_link": {
+                "child_thread_id": child_tid,
+                "name": name,
+                "url": f"/workspace/workflows/{child_tid}",
+            },
+        },
     )
 
 
