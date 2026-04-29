@@ -93,7 +93,34 @@ class TestTitleMiddlewareCoreLogic:
         assert title == "短标题"
         title_middleware_module.create_chat_model.assert_called_once_with(thinking_enabled=False)
         model.ainvoke.assert_awaited_once()
-        assert model.ainvoke.await_args.kwargs["config"] == {"run_name": "title_agent"}
+        config = model.ainvoke.await_args.kwargs["config"]
+        assert config["run_name"] == "title_agent"
+        # Title generation must NOT leak into the parent SSE messages stream;
+        # LangGraph's stream_mode="messages" filters out chunks tagged "nostream".
+        assert "nostream" in config.get("tags", [])
+
+    def test_generate_title_passes_nostream_tag_to_suppress_sse_leak(self, monkeypatch):
+        """Title model invocation must carry the 'nostream' tag so its tokens
+        do not surface in the parent agent's messages-tuple SSE stream."""
+        _set_test_title_config()
+        middleware = TitleMiddleware()
+        model = MagicMock()
+        model.ainvoke = AsyncMock(return_value=AIMessage(content="标题"))
+        monkeypatch.setattr(title_middleware_module, "create_chat_model", MagicMock(return_value=model))
+
+        state = {
+            "messages": [
+                HumanMessage(content="hi"),
+                AIMessage(content="hello"),
+            ]
+        }
+        asyncio.run(middleware._agenerate_title_result(state))
+
+        config = model.ainvoke.await_args.kwargs["config"]
+        assert "nostream" in config.get("tags", []), (
+            "Title model call missing 'nostream' tag — tokens will leak into "
+            "the chat reply stream."
+        )
 
     def test_generate_title_normalizes_structured_message_content(self, monkeypatch):
         _set_test_title_config(max_chars=20)

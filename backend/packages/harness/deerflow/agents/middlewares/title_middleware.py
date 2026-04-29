@@ -127,7 +127,18 @@ class TitleMiddleware(AgentMiddleware[TitleMiddlewareState]):
                 model = create_chat_model(name=config.model_name, thinking_enabled=False)
             else:
                 model = create_chat_model(thinking_enabled=False)
-            response = await model.ainvoke(prompt, config={"run_name": "title_agent"})
+            response = await model.ainvoke(
+                prompt,
+                config={
+                    "run_name": "title_agent",
+                    # Suppress this LLM call from LangGraph's messages-tuple
+                    # stream so title-generation tokens do not leak into the
+                    # parent agent's SSE reply (LangGraph's
+                    # ``stream_mode="messages"`` honors this tag — see
+                    # ``langgraph.constants.TAG_NOSTREAM``).
+                    "tags": ["nostream"],
+                },
+            )
             title = self._parse_title(response.content)
             if title:
                 return {"title": title}
