@@ -164,3 +164,35 @@ def test_load_from_app_config_handles_missing_workflows_attr(monkeypatch):
     registry = WorkflowRegistry.load_from_app_config()
     assert registry.names() == []
     assert registry.failed() == []
+
+
+def test_workflow_spec_accepts_chat_defaults_false():
+    from deerflow.workflows.registry import WorkflowRegistry
+
+    items = [{
+        "name": "demo",
+        "description": "x",
+        "factory": "deerflow.workflows.demo_flow:make_graph",
+        "input_schema": "deerflow.workflows.demo_flow:DemoFlowInput",
+        "done_field": "is_done",
+        "report_field": "report_markdown",
+    }]
+    reg = WorkflowRegistry.load_from_dicts(items)
+    spec = reg.get("demo")
+    assert spec.accepts_chat is False
+
+
+def test_workflow_spec_accepts_chat_explicit_true():
+    from deerflow.workflows.registry import WorkflowRegistry
+
+    items = [{
+        "name": "demo",
+        "description": "x",
+        "factory": "deerflow.workflows.demo_flow:make_graph",
+        "input_schema": "deerflow.workflows.demo_flow:DemoFlowInput",
+        "done_field": "is_done",
+        "report_field": "report_markdown",
+        "accepts_chat": True,
+    }]
+    reg = WorkflowRegistry.load_from_dicts(items)
+    assert reg.get("demo").accepts_chat is True

@@ -40,6 +40,7 @@ class WorkflowSpec:
     report_field: str
     progress_fields: list[str] = field(default_factory=list)
     hint_behavior_doc: str = ""
+    accepts_chat: bool = False
 
 
 class WorkflowRegistry:
@@ -76,6 +77,7 @@ class WorkflowRegistry:
                     report_field=item["report_field"],
                     progress_fields=list(item.get("progress_fields") or []),
                     hint_behavior_doc=item.get("hint_behavior_doc") or "",
+                    accepts_chat=bool(item.get("accepts_chat", False)),
                 ))
             except Exception as e:
                 msg = f"{type(e).__name__}: {e}"
