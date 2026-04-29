@@ -68,7 +68,7 @@ async def list_all_workflows(request: Request) -> dict:
 
     # Lazy imports to avoid pulling workflow tooling into the gateway's
     # bare import graph.
-    from deerflow.workflows.tools import _THREAD_TO_WORKFLOW, _get_registry
+    from deerflow.workflows.tools import _BG_TASKS, _THREAD_TO_WORKFLOW, _get_registry
 
     try:
         registry = _get_registry()
@@ -132,6 +132,13 @@ async def list_all_workflows(request: Request) -> dict:
                     exc_info=True,
                 )
 
+            # No checkpoint AND not currently in flight → the child was
+            # deleted (DELETE /api/threads/{cid}) but the parent's
+            # metadata still references it. Skip — it should not appear
+            # in the hub.
+            if cp_tuple is None and child_tid not in _BG_TASKS:
+                continue
+
             values = {}
             if cp_tuple is not None:
                 values = (cp_tuple.checkpoint or {}).get("channel_values", {}) or {}
@@ -157,9 +164,16 @@ async def list_all_workflows(request: Request) -> dict:
         if not wf_entries:
             continue
 
+        # Title lives in the thread record's `values.title` (written by
+        # TitleMiddleware after the first turn). Older / out-of-band
+        # store writes may put it under `metadata.title` instead.
+        values = record.get("values") or {}
+        title = (
+            values.get("title") if isinstance(values, dict) else None
+        ) or record.get("metadata", {}).get("title")
         parents_out.append({
             "thread_id": parent_thread_id,
-            "title": record.get("title") or record.get("metadata", {}).get("title"),
+            "title": title,
             "created_at": record.get("created_at"),
             "workflows": wf_entries,
         })

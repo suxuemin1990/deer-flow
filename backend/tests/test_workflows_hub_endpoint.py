@@ -16,7 +16,7 @@ async def test_workflows_hub_returns_parents_with_their_children():
     store = MagicMock()
     parent_record = {
         "thread_id": "p1",
-        "title": "Discussion about training",
+        "values": {"title": "Discussion about training"},
         "created_at": "2026-04-29T10:00:00+00:00",
         "metadata": {
             "child_workflow_threads": [
