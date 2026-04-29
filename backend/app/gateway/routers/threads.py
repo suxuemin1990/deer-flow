@@ -12,6 +12,7 @@ matching the LangGraph Platform wire format expected by the
 
 from __future__ import annotations
 
+import asyncio
 import logging
 import uuid
 from datetime import UTC, datetime
@@ -743,6 +744,27 @@ async def cancel_active_workflow(
     if task is None or task.done():
         return {"ok": False, "reason": "workflow already finished"}
     task.cancel()
+    # Wait for the task's CancelledError branch in run_workflow_background to
+    # finish — that branch writes the child _error state and emits the
+    # "[workflow:NAME] cancelled by user" AIMessage to the parent thread.
+    # If we returned before this completes, the frontend would refetch parent
+    # state too early and miss the cancellation notice.
+    # run_workflow_background catches every exception (including
+    # CancelledError) so awaiting it never raises; we still wrap it for
+    # safety against future refactors and pathological hangs.
+    try:
+        await asyncio.wait_for(asyncio.shield(task), timeout=10.0)
+    except TimeoutError:
+        logger.warning(
+            "cancel_active_workflow: task %s did not finish within 10s "
+            "of cancellation; returning anyway (frontend may briefly miss "
+            "the cancellation notice)",
+            child_id,
+        )
+    except (asyncio.CancelledError, Exception):
+        # Task surfaced an exception out of its own cleanup — already logged
+        # by run_workflow_background; safe to swallow here.
+        pass
     return {"ok": True}
 
 

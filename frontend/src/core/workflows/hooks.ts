@@ -60,6 +60,12 @@ export function useCancelActiveWorkflow(parentThreadId: string | null) {
         queryKey: ["workflows", "active", parentThreadId],
       });
       void queryClient.invalidateQueries({ queryKey: ["threads", "search"] });
+      // Backend's cancel endpoint now waits for the task's CancelledError
+      // branch (which emits "[workflow:NAME] cancelled by user" to the
+      // parent thread) to complete before returning. Bump the reload tick
+      // so the open chat page refetches state and surfaces the message
+      // immediately, instead of waiting up to ~2s for the next poll cycle.
+      if (parentThreadId) bumpThreadReloadTick(parentThreadId);
     },
   });
 }
