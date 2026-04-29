@@ -1,23 +1,10 @@
 import { getBackendBaseURL } from "@/core/config";
 
 import type {
-  ActiveWorkflowsResponse,
   AllWorkflowsResponse,
   CancelWorkflowResponse,
   PostWorkflowMessageBody,
 } from "./types";
-
-export async function fetchActiveWorkflows(
-  threadId: string,
-  signal?: AbortSignal,
-): Promise<ActiveWorkflowsResponse> {
-  const url = `${getBackendBaseURL()}/api/threads/${encodeURIComponent(threadId)}/workflows/active`;
-  const response = await fetch(url, { signal });
-  if (!response.ok) {
-    throw new Error(`fetchActiveWorkflows: HTTP ${response.status}`);
-  }
-  return (await response.json()) as ActiveWorkflowsResponse;
-}
 
 export async function cancelActiveWorkflow(
   parentThreadId: string,

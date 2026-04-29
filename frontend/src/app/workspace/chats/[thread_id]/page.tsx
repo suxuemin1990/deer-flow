@@ -26,7 +26,6 @@ import { useModels } from "@/core/models/hooks";
 import { useNotification } from "@/core/notification/hooks";
 import { useThreadSettings } from "@/core/settings";
 import { useThreadStream } from "@/core/threads/hooks";
-import { setCurrentChatThreadId } from "@/core/threads/use-current-chat-thread-id";
 import { textOfMessage } from "@/core/threads/utils";
 import { env } from "@/env";
 import { cn } from "@/lib/utils";
@@ -44,15 +43,6 @@ export default function ChatPage() {
   useEffect(() => {
     setMounted(true);
   }, []);
-
-  // Publish the current thread id to sidebar widgets that live outside
-  // this route segment and can't rely on Next.js's `useParams`/`usePathname`
-  // (those don't update when we swap "/new" → "/<uuid>" via
-  // `history.replaceState`).
-  useEffect(() => {
-    setCurrentChatThreadId(threadId);
-    return () => setCurrentChatThreadId(null);
-  }, [threadId]);
 
   const { showNotification } = useNotification();
 

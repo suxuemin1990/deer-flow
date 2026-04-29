@@ -9,7 +9,6 @@ import {
   useSidebar,
 } from "@/components/ui/sidebar";
 
-import { ActiveWorkflowsPanel } from "./active-workflows-panel";
 import { RecentChatList } from "./recent-chat-list";
 import { WorkspaceHeader } from "./workspace-header";
 import { WorkspaceNavChatList } from "./workspace-nav-chat-list";
@@ -28,7 +27,6 @@ export function WorkspaceSidebar({
         <SidebarContent>
           <WorkspaceNavChatList />
           {isSidebarOpen && <RecentChatList />}
-          {isSidebarOpen && <ActiveWorkflowsPanel />}
         </SidebarContent>
         <SidebarFooter>
           <WorkspaceNavMenu />

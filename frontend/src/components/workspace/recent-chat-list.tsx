@@ -11,7 +11,7 @@ import {
 } from "lucide-react";
 import Link from "next/link";
 import { useParams, usePathname, useRouter } from "next/navigation";
-import { useCallback, useEffect, useState } from "react";
+import { useCallback, useState } from "react";
 import { toast } from "sonner";
 
 import { Button } from "@/components/ui/button";
@@ -54,10 +54,6 @@ import {
   useThreads,
 } from "@/core/threads/hooks";
 import type { AgentThread, AgentThreadState } from "@/core/threads/types";
-import {
-  hasUnreadFinish,
-  useThreadViewed,
-} from "@/core/threads/use-thread-viewed";
 import { pathOfThread, titleOfThread } from "@/core/threads/utils";
 import { env } from "@/env";
 import { isIMEComposing } from "@/lib/ime";
@@ -74,11 +70,6 @@ export function RecentChatList() {
   const { data: threads = [] } = useThreads();
   const { mutate: deleteThread } = useDeleteThread();
   const { mutate: renameThread } = useRenameThread();
-  const { lastViewedAt, markViewed } = useThreadViewed();
-
-  useEffect(() => {
-    if (threadIdFromPath) markViewed(threadIdFromPath);
-  }, [threadIdFromPath, markViewed]);
 
   // Rename dialog state
   const [renameDialogOpen, setRenameDialogOpen] = useState(false);
@@ -198,17 +189,6 @@ export function RecentChatList() {
                         >
                           {titleOfThread(thread)}
                         </Link>
-                        {hasUnreadFinish(
-                          thread.metadata?.recent_workflow_finish_at as
-                            | string
-                            | undefined,
-                          lastViewedAt[thread.thread_id],
-                        ) && (
-                          <span
-                            aria-label="Workflow finished — unread"
-                            className="ml-1 inline-block h-2 w-2 rounded-full bg-red-500 align-middle"
-                          />
-                        )}
                         {env.NEXT_PUBLIC_STATIC_WEBSITE_ONLY !== "true" && (
                           <DropdownMenu>
                             <DropdownMenuTrigger asChild>

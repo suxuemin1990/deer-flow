@@ -5,11 +5,12 @@
  * band (after the parent's normal stream has closed), the LangGraph SDK's
  * `useStream` won't pick up the new checkpoint on its own — it only refetches
  * thread state on threadId change or stream events. This store is a tiny
- * pub/sub bus that lets `useActiveWorkflows` notify the active thread page
- * "your messages are stale; please re-fetch state".
+ * pub/sub bus that lets the workflow cancel mutation (and any other
+ * out-of-band emitter) notify the active thread page "your messages are
+ * stale; please re-fetch state".
  *
- * Pattern matches `use-thread-viewed.ts`: module-singleton + listener set,
- * exposed to React via `useSyncExternalStore`. No new dep.
+ * Pattern: module-singleton + listener set, exposed to React via
+ * `useSyncExternalStore`. No new dep.
  */
 import { useSyncExternalStore } from "react";
 
