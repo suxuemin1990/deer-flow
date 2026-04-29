@@ -39,6 +39,7 @@ class WorkflowSpec:
     done_field: str
     report_field: str
     progress_fields: list[str] = field(default_factory=list)
+    progress_timeline_fields: list[str] = field(default_factory=list)
     hint_behavior_doc: str = ""
     accepts_chat: bool = False
 
@@ -76,6 +77,9 @@ class WorkflowRegistry:
                     done_field=item["done_field"],
                     report_field=item["report_field"],
                     progress_fields=list(item.get("progress_fields") or []),
+                    progress_timeline_fields=list(
+                        item.get("progress_timeline_fields") or []
+                    ),
                     hint_behavior_doc=item.get("hint_behavior_doc") or "",
                     accepts_chat=bool(item.get("accepts_chat", False)),
                 ))

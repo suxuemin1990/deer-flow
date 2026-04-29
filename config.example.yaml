@@ -994,6 +994,7 @@ workflows:
     done_field: is_done
     report_field: report_markdown
     progress_fields: [current_round, max_rounds, history]
+    progress_timeline_fields: [history]
     accepts_chat: true
     hint_behavior_doc: |
       Demo-only — work_loop_node consumes new HumanMessages from the
