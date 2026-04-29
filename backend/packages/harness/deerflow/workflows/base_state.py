@@ -17,13 +17,19 @@ should additionally compose :class:`WorkflowChatStateMixin`::
     class MyFlowState(WorkflowBaseState, WorkflowChatStateMixin):
         ...
 
-and the corresponding spec must declare ``accepts_chat: True``. New
-HumanMessages are appended to ``messages`` by the platform; workflow
-nodes are expected to filter by ``_seen_msg_ids`` (which they own and
-update themselves) to avoid re-feeding the inner LLM on every tick.
+and the corresponding spec must declare ``accepts_chat: True``.
 
-Hints **no longer** flow through ``hints_inbox`` (deleted as of the
-2026-04-29 redesign). All injection is via the ``messages`` channel.
+Hints flow through one of two paths depending on workflow state:
+
+- **Running**: POST handler pushes to :mod:`hints_inbox`; the
+  workflow's loop node drains and emits HumanMessages via node
+  return so ``add_messages`` merges cleanly without overwrite race.
+- **Terminal**: direct ``aupdate_state`` write to the ``messages``
+  channel (no race because no running task).
+
+Both paths land in ``state['messages']`` from the workflow author's
+point of view; they need to filter by ``_seen_msg_ids`` to avoid
+re-feeding the inner LLM on every tick.
 """
 
 from __future__ import annotations

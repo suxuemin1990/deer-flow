@@ -75,21 +75,35 @@ async def inject_user_message_to_workflow(
     spec,
     checkpointer: BaseCheckpointSaver,
 ) -> None:
-    """Append a HumanMessage to a workflow child thread's messages channel.
+    """Append a HumanMessage to a workflow child thread.
 
-    Mirrors :func:`emit_to_parent_thread` but writes HumanMessage (user
-    injection) into the *child* thread instead of AIMessage (agent reply)
-    into the parent. Workflow nodes consume new HumanMessages by reading
-    ``state["messages"]`` at the start of each tick.
+    Routing depends on whether the child currently has a running task:
 
-    Why we use the caller-supplied workflow spec instead of a generic
-    noop graph: SQLite checkpointer only serializes channels declared
-    on the schema being used to write. Writing HumanMessage via a graph
-    compiled against ``ThreadState`` (channels = messages, title,
-    thread_data, artifacts) silently drops every workflow-specific
-    field on the next checkpoint — wiping the workflow's state. By
-    using ``spec.factory(checkpointer=...)``, the appender graph has
-    the workflow's real TypedDict and every channel survives.
+    - **Running** (``child_thread_id in _BG_TASKS``): push to
+      :mod:`hints_inbox`. The running workflow's loop node drains
+      it next tick and emits a HumanMessage via its node return,
+      so ``add_messages`` reducer merges cleanly. We CANNOT use
+      ``aupdate_state`` here — it commits a sibling checkpoint that
+      the running pregel's next step overwrites (Bug 5).
+
+    - **Terminal**: write directly via ``aupdate_state``. No running
+      task means no race; this is the simple path used to keep
+      bidirectional chat working after completion.
+
+    Why we use the caller-supplied workflow spec for the terminal
+    branch: SQLite checkpointer only serializes channels declared
+    on the schema being used to write. Writing HumanMessage via a
+    graph compiled against ``ThreadState`` (channels = messages,
+    title, thread_data, artifacts) silently drops every
+    workflow-specific field on the next checkpoint — wiping the
+    workflow's state. By using ``spec.factory(checkpointer=...)``,
+    the appender graph has the workflow's real TypedDict and every
+    channel survives.
+
+    Caveat (single-process assumption): ``_BG_TASKS`` is in-memory
+    per gateway worker. Multi-worker deployments would route a
+    POST landing on a non-owning worker through the wrong branch.
+    Gateway is currently single-process by deployment convention.
 
     Args:
         child_thread_id: Target child workflow thread.
@@ -102,6 +116,18 @@ async def inject_user_message_to_workflow(
     """
     from langchain_core.messages import HumanMessage
 
+    # Lazy import to avoid a startup cycle:
+    # workflows.tools imports workflows.emit (start_workflow), so
+    # emit at module-load can't import tools.
+    from deerflow.workflows import hints_inbox
+    from deerflow.workflows.tools import _BG_TASKS
+
+    if child_thread_id in _BG_TASKS:
+        # Running: side-channel.
+        await hints_inbox.push(child_thread_id, content)
+        return
+
+    # Terminal: direct write is safe.
     appender = spec.factory(checkpointer=checkpointer)
     await appender.aupdate_state(
         config={"configurable": {"thread_id": child_thread_id}},

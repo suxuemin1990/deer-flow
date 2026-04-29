@@ -202,16 +202,15 @@ async def test_inject_hint_writes_to_inbox(monkeypatch):
         )
         assert "inject" in result.update["messages"][0].content.lower()
 
-        # Hint lands as a HumanMessage in the child workflow's messages
-        # channel — verify via the same checkpointer.
-        from deerflow.workflows.demo_flow import make_graph
-        graph = make_graph(checkpointer=saver)
-        st = await graph.aget_state({"configurable": {"thread_id": child_tid}})
-        msgs = st.values.get("messages") or []
-        from langchain_core.messages import HumanMessage as _HM
+        # Workflow is running (in _BG_TASKS), so the hint routes to the
+        # in-memory hints_inbox (Bug 5 fix). The running task itself drains
+        # it and emits via node return; here we cancel before that happens
+        # and assert the inbox payload directly.
+        from deerflow.workflows import hints_inbox as _ib
+        drained = await _ib.pop_all(child_tid)
         assert any(
-            isinstance(m, _HM) and "try smaller lr" in m.content for m in msgs
-        ), f"expected HumanMessage with hint in child state; got {msgs!r}"
+            "try smaller lr" in h.content for h in drained
+        ), f"expected hint in inbox; got {drained!r}"
 
         # Cancel the running task so the test exits cleanly
         if child_tid in tools_mod._BG_TASKS:
