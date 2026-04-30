@@ -206,7 +206,7 @@ export const zhCN: Translations = {
     more: "更多操作",
     agentCreated: "智能体已创建！",
     startChatting: "开始对话",
-    backToGallery: "返回 Gallery",
+    backToGallery: "返回智能体",
     reconfigureCardLabel: "重新引导",
     reconfigurePageTitle: "重新引导：{name}",
     reconfigureSeedMessage:
@@ -214,10 +214,10 @@ export const zhCN: Translations = {
     reconfigureSeedMessageNoSoul:
       "我想继续完善智能体「{name}」的设定，但它当前还没有 SOUL.md。请像首次引导那样和我对话，准备就绪后调用 setup_agent 创建初版 SOUL（英文输出）。",
     reconfigureNotFound: "找不到该智能体。可能它已被删除。",
-    reconfigureBackToGallery: "返回 Gallery",
+    reconfigureBackToGallery: "返回智能体",
     reconfigureCompletedTitle: "智能体已更新！",
     reconfigureCompletedHint:
-      "更新已生效。返回 Gallery 或直接开始一段新对话来体验调整后的设定。",
+      "更新已生效。返回智能体或直接开始一段新对话来体验调整后的设定。",
   },
 
   // Breadcrumb
