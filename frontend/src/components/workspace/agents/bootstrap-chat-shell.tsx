@@ -234,22 +234,26 @@ export function BootstrapChatShell({
                 className={cn("size-full", showSaveHint ? "pt-4" : "pt-10")}
                 threadId={threadId}
                 thread={thread}
+                paddingBottom={24}
               />
             </div>
 
-            <div className="bg-background flex shrink-0 justify-center border-t px-4 py-4">
+            <div className="bg-background flex shrink-0 justify-center border-t px-4 py-3">
               <div className="w-full max-w-(--container-width-md)">
                 {agent ? (
-                  <div className="flex flex-col items-center gap-4 rounded-2xl border py-8 text-center">
-                    <CheckCircleIcon className="text-primary h-10 w-10" />
-                    <p className="font-semibold">{completedTitle}</p>
-                    {completedHint ? (
-                      <p className="text-muted-foreground text-sm">
-                        {completedHint}
-                      </p>
-                    ) : null}
-                    <div className="flex gap-2">
+                  <div className="flex flex-wrap items-center justify-center gap-x-4 gap-y-2 rounded-2xl border px-4 py-3 text-center sm:flex-nowrap sm:text-left">
+                    <CheckCircleIcon className="text-primary h-6 w-6 shrink-0" />
+                    <div className="flex min-w-0 flex-col">
+                      <p className="text-sm font-semibold">{completedTitle}</p>
+                      {completedHint ? (
+                        <p className="text-muted-foreground text-xs">
+                          {completedHint}
+                        </p>
+                      ) : null}
+                    </div>
+                    <div className="ml-auto flex shrink-0 gap-2">
                       <Button
+                        size="sm"
                         onClick={() =>
                           router.push(
                             `/workspace/agents/${agentName}/chats/new`,
@@ -259,6 +263,7 @@ export function BootstrapChatShell({
                         {t.agents.startChatting}
                       </Button>
                       <Button
+                        size="sm"
                         variant="outline"
                         onClick={() => router.push("/workspace/agents")}
                       >
