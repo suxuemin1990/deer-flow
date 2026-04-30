@@ -222,7 +222,9 @@ export const enUS: Translations = {
     reconfigureCardLabel: "Reconfigure",
     reconfigurePageTitle: "Reconfigure: {name}",
     reconfigureSeedMessage:
-      "I'd like to keep refining the agent '{name}'. Read its current SOUL.md and config, then walk me through the changes I want to make. When we're aligned, call setup_agent with the updated SOUL to overwrite.",
+      "I'd like to keep refining the agent '{name}'. Below is its current SOUL.md — use it as the starting point and walk me through the changes I want to make. When we're aligned, call setup_agent with the updated SOUL to overwrite (keep the same structure, English output).\n\n```markdown\n{soul}\n```",
+    reconfigureSeedMessageNoSoul:
+      "I'd like to keep refining the agent '{name}', but it doesn't have a SOUL.md yet. Run the bootstrap conversation as if from scratch, and call setup_agent when ready (English SOUL).",
     reconfigureNotFound: "Agent not found. It may have been deleted.",
     reconfigureBackToGallery: "Back to gallery",
     reconfigureCompletedTitle: "Agent updated",

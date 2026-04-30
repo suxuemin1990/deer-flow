@@ -154,6 +154,7 @@ export interface Translations {
     reconfigureCardLabel: string;
     reconfigurePageTitle: string;
     reconfigureSeedMessage: string;
+    reconfigureSeedMessageNoSoul: string;
     reconfigureNotFound: string;
     reconfigureBackToGallery: string;
     reconfigureCompletedTitle: string;

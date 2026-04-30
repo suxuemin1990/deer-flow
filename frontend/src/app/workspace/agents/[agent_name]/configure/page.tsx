@@ -66,7 +66,14 @@ export default function ConfigurePage() {
   return (
     <BootstrapChatShell
       agentName={state.agent.name}
-      seedMessage={t.agents.reconfigureSeedMessage}
+      seedMessage={
+        state.agent.soul?.trim()
+          ? t.agents.reconfigureSeedMessage.replace(
+              "{soul}",
+              state.agent.soul.trim(),
+            )
+          : t.agents.reconfigureSeedMessageNoSoul
+      }
       mode="reconfigure"
       headerTitle={t.agents.reconfigurePageTitle.replace(
         "{name}",

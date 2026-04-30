@@ -210,7 +210,9 @@ export const zhCN: Translations = {
     reconfigureCardLabel: "重新引导",
     reconfigurePageTitle: "重新引导：{name}",
     reconfigureSeedMessage:
-      "我想继续完善智能体「{name}」的设定。请基于它当前已有的 SOUL.md 和配置，与我讨论本次想调整的方向；准备就绪后调用 setup_agent 用更新后的 SOUL 覆盖。",
+      "我想继续完善智能体「{name}」的设定。下面是它当前的 SOUL.md，请以此为起点和我讨论本次想调整的方向；准备就绪后调用 setup_agent 用更新后的 SOUL 整体覆盖（保留原有结构、用英文输出）。\n\n```markdown\n{soul}\n```",
+    reconfigureSeedMessageNoSoul:
+      "我想继续完善智能体「{name}」的设定，但它当前还没有 SOUL.md。请像首次引导那样和我对话，准备就绪后调用 setup_agent 创建初版 SOUL（英文输出）。",
     reconfigureNotFound: "找不到该智能体。可能它已被删除。",
     reconfigureBackToGallery: "返回 Gallery",
     reconfigureCompletedTitle: "智能体已更新！",
