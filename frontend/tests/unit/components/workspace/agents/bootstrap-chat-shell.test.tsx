@@ -13,8 +13,10 @@ vi.mock("next/navigation", () => ({
 // Spy on useThreadStream to capture sendMessage + onToolEnd
 const sendMessageMock = vi.fn().mockResolvedValue(undefined);
 const useThreadStreamMock = vi.fn();
+const deleteThreadMock = vi.fn();
 vi.mock("@/core/threads/hooks", () => ({
   useThreadStream: (args: unknown) => useThreadStreamMock(args),
+  useDeleteThread: () => ({ mutate: deleteThreadMock }),
 }));
 
 // Stub agent fetch

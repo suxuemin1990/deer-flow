@@ -31,7 +31,7 @@ import { ThreadContext } from "@/components/workspace/messages/context";
 import type { Agent } from "@/core/agents";
 import { getAgent } from "@/core/agents/api";
 import { useI18n } from "@/core/i18n/hooks";
-import { useThreadStream } from "@/core/threads/hooks";
+import { useThreadStream, useDeleteThread } from "@/core/threads/hooks";
 import { uuid } from "@/core/utils/uuid";
 import { cn } from "@/lib/utils";
 
@@ -87,6 +87,7 @@ export function BootstrapChatShell({
 
   const threadId = useMemo(() => uuid(), []);
   const seededRef = useRef(false);
+  const { mutate: deleteThread } = useDeleteThread();
 
   const [thread, sendMessage] = useThreadStream({
     threadId,
@@ -126,6 +127,18 @@ export function BootstrapChatShell({
     setShowSaveHint(true);
     window.localStorage.setItem(SAVE_HINT_STORAGE_KEY, "1");
   }, []);
+
+  // Bootstrap threads are throwaway — they exist only to drive the
+  // setup_agent conversation. Whether the user finishes saving, navigates
+  // away mid-chat, or closes the tab in-app, the thread itself has no
+  // lasting value; leaving it in the sidebar is just clutter and re-opening
+  // it lands on a non-bootstrap context (different agent / no SOUL injected).
+  // Delete on unmount.
+  useEffect(() => {
+    return () => {
+      deleteThread({ threadId });
+    };
+  }, [deleteThread, threadId]);
 
   const handleChatSubmit = useCallback(
     async (text: string) => {
