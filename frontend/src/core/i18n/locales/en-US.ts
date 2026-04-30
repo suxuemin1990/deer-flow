@@ -219,6 +219,15 @@ export const enUS: Translations = {
     agentCreated: "Agent created!",
     startChatting: "Start chatting",
     backToGallery: "Back to Gallery",
+    reconfigureCardLabel: "Reconfigure",
+    reconfigurePageTitle: "Reconfigure: {name}",
+    reconfigureSeedMessage:
+      "I'd like to keep refining the agent '{name}'. Read its current SOUL.md and config, then walk me through the changes I want to make. When we're aligned, call setup_agent with the updated SOUL to overwrite.",
+    reconfigureNotFound: "Agent not found. It may have been deleted.",
+    reconfigureBackToGallery: "Back to gallery",
+    reconfigureCompletedTitle: "Agent updated",
+    reconfigureCompletedHint:
+      "The update is live. Head back to the gallery or start a new chat to try the revised settings.",
   },
 
   // Breadcrumb

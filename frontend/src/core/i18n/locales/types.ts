@@ -151,6 +151,13 @@ export interface Translations {
     agentCreated: string;
     startChatting: string;
     backToGallery: string;
+    reconfigureCardLabel: string;
+    reconfigurePageTitle: string;
+    reconfigureSeedMessage: string;
+    reconfigureNotFound: string;
+    reconfigureBackToGallery: string;
+    reconfigureCompletedTitle: string;
+    reconfigureCompletedHint: string;
   };
 
   // Breadcrumb
