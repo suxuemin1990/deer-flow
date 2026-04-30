@@ -314,17 +314,163 @@ def _extract_child_thread_ids(metadata: dict | None) -> list[str]:
     return out
 
 
+async def _scrub_parent_references_to_child(
+    deleted_child_id: str,
+    *,
+    store,
+    checkpointer,
+) -> None:
+    """Strip *deleted_child_id* from any parent thread that references it.
+
+    When a *child* workflow thread is deleted directly (e.g. user clicks the
+    workflow-hub trash icon → ``DELETE /api/threads/{child}``), the parent
+    chat thread keeps three persistent references that turn into dangling
+    pointers:
+
+    1. ``metadata.child_workflow_threads`` array entry written by
+       ``_record_child_workflow_thread`` in ``workflows.tools``.
+    2. The ``start_workflow`` ToolMessage with
+       ``additional_kwargs.workflow_link.child_thread_id == deleted_child_id``.
+    3. The ``[workflow:NAME] done`` AIMessage emitted via
+       ``emit_to_parent_thread`` with
+       ``additional_kwargs.workflow_done.child_thread_id == deleted_child_id``.
+
+    All three are removed in best-effort fashion; any single failure is
+    logged but does not abort the rest of the scrub or the delete.
+
+    Implementation note: parents are discovered by scanning the Store's
+    ``threads`` namespace. The list is bounded by the number of user chat
+    threads in the workspace (currently O(hundreds)); a reverse index
+    (child_tid -> parent_tid) would be premature optimization.
+    """
+    if store is None:
+        return
+    try:
+        items = await store.asearch(THREADS_NS, limit=10_000)
+    except Exception:
+        logger.debug(
+            "Could not enumerate thread records to scrub parent refs to %s",
+            deleted_child_id,
+            exc_info=True,
+        )
+        return
+
+    for item in items:
+        rec = getattr(item, "value", None) or {}
+        if not isinstance(rec, dict):
+            continue
+        meta = rec.get("metadata") or {}
+        children = meta.get("child_workflow_threads") if isinstance(meta, dict) else None
+        if not isinstance(children, list):
+            continue
+        new_children = [
+            e for e in children
+            if not (isinstance(e, dict) and e.get("thread_id") == deleted_child_id)
+        ]
+        if len(new_children) == len(children):
+            continue  # parent does not reference deleted child
+
+        parent_tid = rec.get("thread_id") or getattr(item, "key", None)
+        if not isinstance(parent_tid, str) or not parent_tid:
+            continue
+
+        # 1. Update parent's store record.
+        try:
+            new_meta = dict(meta)
+            new_meta["child_workflow_threads"] = new_children
+            new_rec = dict(rec)
+            new_rec["metadata"] = new_meta
+            new_rec["updated_at"] = _iso_now()
+            new_rec.setdefault("thread_id", parent_tid)
+            await _store_put(store, new_rec)
+        except Exception:
+            logger.debug(
+                "Could not update parent %s metadata while scrubbing %s",
+                parent_tid, deleted_child_id, exc_info=True,
+            )
+
+        # 2 & 3. Remove dangling messages from parent's checkpoint.
+        if checkpointer is not None:
+            try:
+                await _remove_workflow_messages_referencing_child(
+                    parent_tid, deleted_child_id, checkpointer,
+                )
+            except Exception:
+                logger.debug(
+                    "Could not scrub parent %s messages referencing %s",
+                    parent_tid, deleted_child_id, exc_info=True,
+                )
+
+
+def _message_references_child(msg, deleted_child_id: str) -> bool:
+    """Return True if *msg* is a workflow link/done marker for the deleted child."""
+    ak = getattr(msg, "additional_kwargs", None) or {}
+    if not isinstance(ak, dict):
+        return False
+    wl = ak.get("workflow_link")
+    if isinstance(wl, dict) and wl.get("child_thread_id") == deleted_child_id:
+        return True
+    wd = ak.get("workflow_done")
+    if isinstance(wd, dict) and wd.get("child_thread_id") == deleted_child_id:
+        return True
+    return False
+
+
+async def _remove_workflow_messages_referencing_child(
+    parent_tid: str, deleted_child_id: str, checkpointer
+) -> None:
+    """Issue ``RemoveMessage`` for every workflow_link / workflow_done message
+    in *parent_tid*'s checkpoint that points at *deleted_child_id*.
+
+    Uses the same ThreadState appender pattern as ``emit_to_parent_thread``
+    so we don't drop unrelated channels (title, thread_data, artifacts) on
+    write.
+    """
+    from langchain_core.messages import RemoveMessage
+    from langgraph.graph import END, START, StateGraph
+
+    # Lazy import to avoid the agents-package import cycle at module load.
+    from deerflow.agents.thread_state import ThreadState
+
+    g = StateGraph(ThreadState)
+    g.add_node("noop", lambda s: s)
+    g.add_edge(START, "noop")
+    g.add_edge("noop", END)
+    appender = g.compile(checkpointer=checkpointer)
+    cfg = {"configurable": {"thread_id": parent_tid}}
+
+    state = await appender.aget_state(cfg)
+    msgs = list((state.values or {}).get("messages") or [])
+    to_remove = [
+        m.id for m in msgs
+        if getattr(m, "id", None) and _message_references_child(m, deleted_child_id)
+    ]
+    if not to_remove:
+        return
+    await appender.aupdate_state(
+        config=cfg,
+        values={"messages": [RemoveMessage(id=mid) for mid in to_remove]},
+        as_node="__start__",
+    )
+
+
 @router.delete("/{thread_id}", response_model=ThreadDeleteResponse)
 async def delete_thread_data(thread_id: str, request: Request) -> ThreadDeleteResponse:
-    """Delete a thread and all of its child workflow threads.
+    """Delete a thread and clean every reference pointing at it.
 
-    Cleans DeerFlow-managed thread directories, removes checkpoint data, and
-    removes the thread record from the Store — for the parent thread *and*
-    for every child listed in the parent's ``metadata.child_workflow_threads``.
+    Cascade direction depends on the role of *thread_id*:
 
-    Without the cascade, child workflow threads (which are filtered out of
-    /threads/search by design) become invisible orphans on disk and in the
-    checkpointer.
+    - **Parent chat**: cascade *into* ``metadata.child_workflow_threads`` so
+      child workflow threads (filtered out of /threads/search by design)
+      don't become invisible orphans on disk and in the checkpointer.
+    - **Child workflow**: scrub *outward* — strip the entry from every
+      parent's ``child_workflow_threads`` array, and remove the persisted
+      ``workflow_link`` ToolMessage / ``workflow_done`` AIMessage from the
+      parent's checkpoint so the parent chat no longer renders dangling
+      cards. Without this, the parent retains a stale 404 link forever.
+
+    Both directions clean DeerFlow-managed thread directories, store
+    records, and checkpoint data for *thread_id* itself.
     """
     store = get_store(request)
     checkpointer = getattr(request.app.state, "checkpointer", None)
@@ -364,6 +510,23 @@ async def delete_thread_data(thread_id: str, request: Request) -> ThreadDeleteRe
             await checkpointer.adelete_thread(thread_id)
         except Exception:
             logger.debug("Could not delete checkpoints for thread %s (not critical)", thread_id)
+
+    # Reverse-direction cascade: if *thread_id* was a child of any other
+    # thread, scrub the parent's references. Also drop any in-process
+    # workflow registry entries.
+    await _scrub_parent_references_to_child(
+        thread_id, store=store, checkpointer=checkpointer,
+    )
+    try:
+        from deerflow.workflows.tools import _BG_TASKS, _THREAD_TO_WORKFLOW
+
+        _BG_TASKS.pop(thread_id, None)
+        _THREAD_TO_WORKFLOW.pop(thread_id, None)
+    except Exception:
+        logger.debug(
+            "Could not clear workflow in-process registry for %s",
+            thread_id, exc_info=True,
+        )
 
     return response
 

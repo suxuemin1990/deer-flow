@@ -43,6 +43,7 @@ async def emit_to_parent_thread(
     content: str,
     *,
     checkpointer: BaseCheckpointSaver,
+    additional_kwargs: dict | None = None,
 ) -> None:
     """Append an AIMessage to the parent thread's checkpoint.
 
@@ -55,6 +56,16 @@ async def emit_to_parent_thread(
           turn — the agent is the one telling the user "the workflow you
           asked for finished and here's the report".
 
+    Args:
+        parent_thread_id: thread to append to.
+        content: AIMessage body.
+        checkpointer: shared checkpointer.
+        additional_kwargs: optional metadata attached to the AIMessage. The
+            workflow runner uses this to mark messages with
+            ``workflow_done.child_thread_id``/``workflow_cancelled``/
+            ``workflow_failed`` so DELETE on a child thread can scrub the
+            corresponding marker from the parent's history.
+
     Note:
         LangGraph's ``aupdate_state`` silently creates a fresh checkpoint
         when no prior checkpoint exists for ``parent_thread_id``. A wrong
@@ -62,9 +73,13 @@ async def emit_to_parent_thread(
         "must exist" semantics must validate the id themselves.
     """
     appender = _build_message_appender(checkpointer)
+    msg = AIMessage(
+        content=content,
+        additional_kwargs=dict(additional_kwargs) if additional_kwargs else {},
+    )
     await appender.aupdate_state(
         config={"configurable": {"thread_id": parent_thread_id}},
-        values={"messages": [AIMessage(content=content)]},
+        values={"messages": [msg]},
     )
 
 

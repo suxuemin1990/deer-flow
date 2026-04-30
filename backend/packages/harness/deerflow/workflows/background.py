@@ -138,6 +138,13 @@ async def run_workflow_background(
                 parent_thread_id,
                 f"[workflow:{spec.name}] cancelled by user",
                 checkpointer=checkpointer,
+                additional_kwargs={
+                    "workflow_done": {
+                        "child_thread_id": child_thread_id,
+                        "name": spec.name,
+                        "status": "cancelled",
+                    },
+                },
             )
         except Exception:
             logger.exception("could not emit cancel notice to parent %s", parent_thread_id)
@@ -161,6 +168,13 @@ async def run_workflow_background(
                 parent_thread_id,
                 f"[workflow:{spec.name}] failed: {err}",
                 checkpointer=checkpointer,
+                additional_kwargs={
+                    "workflow_done": {
+                        "child_thread_id": child_thread_id,
+                        "name": spec.name,
+                        "status": "failed",
+                    },
+                },
             )
         except Exception:
             logger.exception("could not emit failure to parent %s", parent_thread_id)
@@ -179,6 +193,13 @@ async def run_workflow_background(
                 parent_thread_id,
                 f"[workflow:{spec.name}] done\n\n{report}",
                 checkpointer=checkpointer,
+                additional_kwargs={
+                    "workflow_done": {
+                        "child_thread_id": child_thread_id,
+                        "name": spec.name,
+                        "status": "done",
+                    },
+                },
             )
         else:
             logger.warning(

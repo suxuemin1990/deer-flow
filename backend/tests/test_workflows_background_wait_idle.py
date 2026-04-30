@@ -59,7 +59,7 @@ async def test_emit_waits_until_parent_thread_is_idle(monkeypatch):
 
     emit_calls: list[tuple[str, str]] = []
 
-    async def _fake_emit(parent_tid, content, *, checkpointer):
+    async def _fake_emit(parent_tid, content, *, checkpointer, additional_kwargs=None):
         emit_calls.append((parent_tid, content))
 
     monkeypatch.setattr(bg, "emit_to_parent_thread", _fake_emit)
@@ -176,7 +176,7 @@ async def test_run_workflow_background_calls_wait_before_emit(monkeypatch):
         order.append(f"wait:{parent_tid}")
         await wait_called(parent_tid, **kw)
 
-    async def _fake_emit(parent_tid, content, *, checkpointer):
+    async def _fake_emit(parent_tid, content, *, checkpointer, additional_kwargs=None):
         order.append(f"emit:{parent_tid}")
 
     monkeypatch.setattr(bg, "_wait_for_parent_idle", _wait)
