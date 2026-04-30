@@ -5,6 +5,13 @@ export interface CancelWorkflowResponse {
 
 export type WorkflowStatus = "running" | "done" | "failed" | "cancelled";
 
+export const WORKFLOW_STATUS_LABEL: Record<WorkflowStatus, string> = {
+  running: "运行中",
+  done: "已完成",
+  failed: "失败",
+  cancelled: "已取消",
+};
+
 export interface WorkflowEntry {
   child_thread_id: string;
   name: string;

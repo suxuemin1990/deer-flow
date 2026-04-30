@@ -9,7 +9,10 @@ import { Textarea } from "@/components/ui/textarea";
 import { MarkdownContent } from "@/components/workspace/messages/markdown-content";
 import { streamdownPlugins } from "@/core/streamdown";
 import { cancelActiveWorkflow } from "@/core/workflows/api";
-import type { WorkflowEntry } from "@/core/workflows/types";
+import {
+  WORKFLOW_STATUS_LABEL,
+  type WorkflowEntry,
+} from "@/core/workflows/types";
 import {
   useWorkflowChat,
   type WorkflowMessage,
@@ -114,7 +117,7 @@ export function WorkflowChatPanel({ parentThreadId, workflow }: Props) {
       <div className="flex items-center gap-3 border-b p-3">
         <span className="font-medium">{workflow.name}</span>
         <span className="text-muted-foreground text-sm">
-          · {workflow.status}
+          · {WORKFLOW_STATUS_LABEL[workflow.status]}
           {progressEntries.length > 0 &&
             " · " +
               progressEntries
