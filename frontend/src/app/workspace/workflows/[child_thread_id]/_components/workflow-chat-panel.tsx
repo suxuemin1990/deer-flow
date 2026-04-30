@@ -92,7 +92,7 @@ export function WorkflowChatPanel({ parentThreadId, workflow }: Props) {
   );
 
   return (
-    <div className="flex h-full flex-col">
+    <div className="flex h-full flex-col overflow-hidden">
       {/* Header */}
       <div className="flex items-center gap-3 border-b p-3">
         <span className="font-medium">{workflow.name}</span>
@@ -126,39 +126,42 @@ export function WorkflowChatPanel({ parentThreadId, workflow }: Props) {
         )}
       </div>
 
-      {/* Progress timeline (only when spec declares fields) */}
-      {workflow.progress_timeline_fields &&
-        workflow.progress_timeline_fields.length > 0 && (
-          <ProgressTimeline
-            values={progress}
-            fields={workflow.progress_timeline_fields}
-          />
+      {/* Single scroll container for timeline + summary + messages.
+          Guarantees header + input always visible regardless of content size. */}
+      <div className="min-h-0 flex-1 overflow-auto">
+        {/* Progress timeline (only when spec declares fields) */}
+        {workflow.progress_timeline_fields &&
+          workflow.progress_timeline_fields.length > 0 && (
+            <ProgressTimeline
+              values={progress}
+              fields={workflow.progress_timeline_fields}
+            />
+          )}
+
+        {/* Terminal summary card */}
+        {terminal && (
+          <div className="bg-muted/50 m-3 rounded-lg border p-3 text-sm">
+            {workflow.status === "done" && workflow.report_preview && (
+              <pre className="whitespace-pre-wrap font-sans">
+                {workflow.report_preview}
+              </pre>
+            )}
+            {workflow.status === "failed" && (
+              <span className="text-red-600">
+                {workflow.error ?? "Failed"}
+              </span>
+            )}
+            {workflow.status === "cancelled" && (
+              <span className="text-muted-foreground">
+                Cancelled by user
+                {workflow.error ? `: ${workflow.error}` : ""}
+              </span>
+            )}
+          </div>
         )}
 
-      {/* Terminal summary card */}
-      {terminal && (
-        <div className="bg-muted/50 m-3 rounded-lg border p-3 text-sm">
-          {workflow.status === "done" && workflow.report_preview && (
-            <pre className="whitespace-pre-wrap font-sans">
-              {workflow.report_preview}
-            </pre>
-          )}
-          {workflow.status === "failed" && (
-            <span className="text-red-600">
-              {workflow.error ?? "Failed"}
-            </span>
-          )}
-          {workflow.status === "cancelled" && (
-            <span className="text-muted-foreground">
-              Cancelled by user
-              {workflow.error ? `: ${workflow.error}` : ""}
-            </span>
-          )}
-        </div>
-      )}
-
-      {/* Messages */}
-      <div ref={listRef} className="flex-1 space-y-2 overflow-auto p-3">
+        {/* Messages */}
+        <div ref={listRef} className="space-y-2 p-3">
         {isLoading && (
           <div className="text-muted-foreground text-sm">Loading…</div>
         )}
@@ -210,6 +213,7 @@ export function WorkflowChatPanel({ parentThreadId, workflow }: Props) {
             </div>
           </div>
         ))}
+        </div>
       </div>
 
       {/* Input */}
