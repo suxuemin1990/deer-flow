@@ -140,13 +140,24 @@ export function WorkflowChatPanel({ parentThreadId, workflow }: Props) {
         {/* Terminal summary card (terminal-only; rendered FIRST when present) */}
         {terminal && (
           <div className="bg-muted/50 m-3 rounded-lg border p-3 text-sm">
-            {workflow.status === "done" && workflow.report_preview && (
-              <MarkdownContent
-                content={workflow.report_preview}
-                isLoading={false}
-                rehypePlugins={streamdownPlugins.rehypePlugins}
-              />
-            )}
+            {workflow.status === "done" && (() => {
+              // Prefer the full report from the polled state; fall back to
+              // hub's truncated preview if the state hasn't loaded yet.
+              const fromState = workflow.report_field
+                ? progress[workflow.report_field]
+                : null;
+              const md =
+                typeof fromState === "string" && fromState.length > 0
+                  ? fromState
+                  : workflow.report_preview;
+              return md ? (
+                <MarkdownContent
+                  content={md}
+                  isLoading={false}
+                  rehypePlugins={streamdownPlugins.rehypePlugins}
+                />
+              ) : null;
+            })()}
             {workflow.status === "failed" && (
               <span className="text-red-600">
                 {workflow.error ?? "Failed"}

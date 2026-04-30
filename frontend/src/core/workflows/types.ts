@@ -13,6 +13,7 @@ export interface WorkflowEntry {
   finished_at: string | null;
   progress: Record<string, unknown>;
   progress_timeline_fields: string[];
+  report_field: string | null;
   report_preview: string | null;
   error: string | null;
 }
