@@ -77,13 +77,24 @@ export function WorkflowChatPanel({ parentThreadId, workflow }: Props) {
     }
   }, [messages, pendingHints]);
 
-  // Autoscroll to bottom on new messages
+  const terminal = isTerminal(workflow.status);
+
+  // Autoscroll only while running: keep the latest message in view as
+  // the workflow chats. In terminal states the user wants to read from
+  // the top (report card first), so we don't yank scroll position.
   useEffect(() => {
+    if (terminal) return;
     const el = listRef.current;
     if (el) el.scrollTop = el.scrollHeight;
-  }, [messages.length]);
+  }, [messages.length, terminal]);
 
-  const terminal = isTerminal(workflow.status);
+  // When entering a terminal state, snap to top once so the report is
+  // visible first.
+  useEffect(() => {
+    if (!terminal) return;
+    const el = listRef.current;
+    if (el) el.scrollTop = 0;
+  }, [terminal]);
   // Render progress fields compactly. Skip non-scalar values (lists,
   // objects) — they don't fit on a one-line header and would render as
   // "[object Object]"; users see the full structured view in the
@@ -140,7 +151,7 @@ export function WorkflowChatPanel({ parentThreadId, workflow }: Props) {
             timeline below as supporting / audit evidence.
           - running: no report yet, so timeline is the only progress
             signal — render it first. */}
-      <div className="min-h-0 flex-1 overflow-auto">
+      <div ref={listRef} className="min-h-0 flex-1 overflow-auto">
         {/* Terminal summary card (terminal-only; rendered FIRST when present) */}
         {terminal && (
           <div className="bg-muted/50 m-3 rounded-lg border p-3 text-sm">
@@ -186,7 +197,7 @@ export function WorkflowChatPanel({ parentThreadId, workflow }: Props) {
           )}
 
         {/* Messages */}
-        <div ref={listRef} className="space-y-2 p-3">
+        <div className="space-y-2 p-3">
         {isLoading && (
           <div className="text-muted-foreground text-sm">Loading…</div>
         )}
