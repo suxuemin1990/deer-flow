@@ -96,8 +96,11 @@ export function BootstrapChatShell({
         setSetupAgentStatus("idle");
       }
     },
-    onToolEnd({ name }) {
-      if (name !== "setup_agent") return;
+    onSetupAgentComplete() {
+      // setup_agent succeeded — written via onUpdateEvent's Command payload.
+      // The gateway does not emit `events` stream mode, so `on_tool_end`
+      // never reaches us; this state-update sniff is the only reliable
+      // signal that the tool finished.
       setSetupAgentStatus("completed");
       void getAgentWithRetry(agentName).then((fetched) => {
         if (fetched) {

@@ -24,6 +24,15 @@ export type ToolEndEvent = {
   data: unknown;
 };
 
+export type SetupAgentCompleteEvent = {
+  /** Agent name from `Command(update={...})` payload, if surfaced.
+   *  May be empty string — the gateway strips non-schema keys, so this
+   *  is best-effort. The consumer should rely on its own context for
+   *  the agent name (it must already know it to have invoked setup_agent
+   *  with `agent_name` in runtime context). */
+  agentName: string;
+};
+
 export type ThreadStreamOptions = {
   threadId?: string | null | undefined;
   context: LocalSettings["context"];
@@ -37,6 +46,11 @@ export type ThreadStreamOptions = {
   onStart?: (threadId: string) => void;
   onFinish?: (state: AgentThreadState) => void;
   onToolEnd?: (event: ToolEndEvent) => void;
+  /** Fires when `setup_agent` writes `created_agent_name` to graph state.
+   *  Sniffed from `onUpdateEvent` because the gateway runs in `astream`
+   *  mode (no `astream_events`), so `on_tool_end` callbacks never reach
+   *  the client. The Command(update={...}) payload from setup_agent does. */
+  onSetupAgentComplete?: (event: SetupAgentCompleteEvent) => void;
 };
 
 type SendMessageOptions = {
@@ -149,6 +163,7 @@ export function useThreadStream({
   onStart,
   onFinish,
   onToolEnd,
+  onSetupAgentComplete,
 }: ThreadStreamOptions) {
   const { t } = useI18n();
   // Track the thread ID that is currently streaming to handle thread changes during streaming
@@ -162,12 +177,18 @@ export function useThreadStream({
     onStart,
     onFinish,
     onToolEnd,
+    onSetupAgentComplete,
   });
 
   // Keep listeners ref updated with latest callbacks
   useEffect(() => {
-    listeners.current = { onStart, onFinish, onToolEnd };
-  }, [onStart, onFinish, onToolEnd]);
+    listeners.current = {
+      onStart,
+      onFinish,
+      onToolEnd,
+      onSetupAgentComplete,
+    };
+  }, [onStart, onFinish, onToolEnd, onSetupAgentComplete]);
 
   useEffect(() => {
     const normalizedThreadId = threadId ?? null;
@@ -266,6 +287,30 @@ export function useThreadStream({
               });
             },
           );
+        }
+        // Sniff `setup_agent` tool completion. The gateway runs astream
+        // (not astream_events), so on_tool_end callbacks never reach the
+        // client. The tool-node update DOES surface in onUpdateEvent as
+        // a `messages` entry with type=tool, name=setup_agent — that's
+        // the only reliable signal that the create/reconfigure flow
+        // landed on disk.
+        if (update && "messages" in update && Array.isArray(update.messages)) {
+          for (const m of update.messages as Array<{
+            type?: string;
+            name?: string;
+            status?: string;
+          }>) {
+            if (
+              m?.type === "tool" &&
+              m.name === "setup_agent" &&
+              m.status !== "error"
+            ) {
+              listeners.current.onSetupAgentComplete?.({
+                agentName: "",
+              });
+              break;
+            }
+          }
         }
       }
     },
