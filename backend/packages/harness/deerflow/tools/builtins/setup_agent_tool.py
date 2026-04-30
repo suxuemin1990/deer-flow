@@ -39,14 +39,32 @@ def setup_agent(
         agent_dir.mkdir(parents=True, exist_ok=True)
 
         if agent_name:
-            # If agent_name is provided, we are creating a custom agent in the agents/ directory
-            config_data: dict = {"name": agent_name}
+            # Merge with existing config to preserve fields setup_agent
+            # doesn't manage (model, tool_groups, ...). Reconfigure flow
+            # depends on this — a fresh write would silently drop the
+            # operator-curated model / tool_groups.
+            config_file = agent_dir / "config.yaml"
+            existing: dict = {}
+            if config_file.exists():
+                try:
+                    with open(config_file, "r", encoding="utf-8") as f:
+                        loaded = yaml.safe_load(f) or {}
+                    if isinstance(loaded, dict):
+                        existing = loaded
+                except Exception as exc:  # noqa: BLE001
+                    logger.warning(
+                        "[agent_creator] failed to parse existing %s: %s; "
+                        "treating as empty",
+                        config_file,
+                        exc,
+                    )
+
+            config_data: dict = {**existing, "name": agent_name}
             if description:
                 config_data["description"] = description
             if skills is not None:
                 config_data["skills"] = skills
 
-            config_file = agent_dir / "config.yaml"
             with open(config_file, "w", encoding="utf-8") as f:
                 yaml.dump(config_data, f, default_flow_style=False, allow_unicode=True)
 

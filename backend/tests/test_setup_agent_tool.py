@@ -125,3 +125,73 @@ class TestSetupAgentNoDataLoss:
         assert agent_dir.exists()
         assert (agent_dir / "SOUL.md").read_text() == "# My Agent"
         assert (agent_dir / "config.yaml").exists()
+
+
+def test_setup_agent_preserves_existing_model_and_tool_groups(tmp_path):
+    """When config.yaml already exists, setup_agent must keep fields
+    it doesn't manage (model, tool_groups) and only update the ones
+    it does (name, description, skills)."""
+    import yaml as _yaml
+
+    runtime = _make_runtime(agent_name="reconfigure-me")
+    paths = _make_paths_mock(tmp_path)
+    agent_dir = paths.agent_dir("reconfigure-me")
+    agent_dir.mkdir(parents=True)
+    (agent_dir / "SOUL.md").write_text("old soul", encoding="utf-8")
+    (agent_dir / "config.yaml").write_text(
+        _yaml.dump(
+            {
+                "name": "reconfigure-me",
+                "description": "old description",
+                "model": "doubao-seed-2.0",
+                "tool_groups": ["coding", "search"],
+                "skills": ["foo"],
+            }
+        ),
+        encoding="utf-8",
+    )
+
+    with patch(
+        "deerflow.tools.builtins.setup_agent_tool.get_paths", return_value=paths
+    ):
+        setup_agent.func(
+            soul="new soul",
+            description="new description",
+            skills=["bar"],
+            runtime=runtime,
+        )
+
+    with open(agent_dir / "config.yaml", "r", encoding="utf-8") as f:
+        merged = _yaml.safe_load(f)
+
+    assert merged["name"] == "reconfigure-me"
+    assert merged["description"] == "new description"
+    assert merged["skills"] == ["bar"]
+    # These were NOT passed to setup_agent and must be preserved
+    assert merged["model"] == "doubao-seed-2.0"
+    assert merged["tool_groups"] == ["coding", "search"]
+    assert (agent_dir / "SOUL.md").read_text(encoding="utf-8") == "new soul"
+
+
+def test_setup_agent_creates_minimal_config_when_no_existing_file(tmp_path):
+    """First-time creation behaviour stays unchanged: no existing
+    config.yaml, only the fields setup_agent wrote should appear."""
+    import yaml as _yaml
+
+    runtime = _make_runtime(agent_name="brand-new")
+    paths = _make_paths_mock(tmp_path)
+
+    with patch(
+        "deerflow.tools.builtins.setup_agent_tool.get_paths", return_value=paths
+    ):
+        setup_agent.func(
+            soul="soul",
+            description="desc",
+            skills=None,
+            runtime=runtime,
+        )
+
+    with open(paths.agent_dir("brand-new") / "config.yaml", "r", encoding="utf-8") as f:
+        written = _yaml.safe_load(f)
+
+    assert written == {"name": "brand-new", "description": "desc"}
