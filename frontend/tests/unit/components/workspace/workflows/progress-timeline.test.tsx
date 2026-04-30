@@ -16,7 +16,7 @@ describe("ProgressTimeline", () => {
     render(
       <ProgressTimeline values={{ history: [] }} fields={["history"]} />,
     );
-    expect(screen.getByText(/no progress yet/i)).toBeInTheDocument();
+    expect(screen.getByText(/暂无进度/)).toBeInTheDocument();
   });
 
   test("renders one row per history entry with scalar fields", () => {
