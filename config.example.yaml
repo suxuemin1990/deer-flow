@@ -1002,3 +1002,20 @@ workflows:
       has no LLM nodes, so it does not produce AIMessage replies; the
       Workflow Hub UI surfaces ✓ (delivered) and ✓✓ (consumed, when
       progress fields advance).
+
+  - name: chat-demo
+    description: |
+      Bidirectional chat showcase. Each round emits an AIMessage; user
+      injection is acknowledged in the next round's AIMessage. No real
+      LLM — replies are templated. Use to verify the workflow detail
+      page's chat panel UX end-to-end.
+    factory: deerflow.workflows.chat_demo:make_graph
+    input_schema: deerflow.workflows.chat_demo:ChatDemoInput
+    done_field: is_done
+    report_field: report_markdown
+    progress_fields: [current_round, max_rounds]
+    progress_timeline_fields: [history]
+    accepts_chat: true
+    hint_behavior_doc: |
+      Each round drains the hints inbox and emits an AIMessage that
+      either acknowledges the new hint(s) or narrates progress.
