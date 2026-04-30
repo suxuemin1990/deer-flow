@@ -129,18 +129,15 @@ export function WorkflowChatPanel({ parentThreadId, workflow }: Props) {
       </div>
 
       {/* Single scroll container for timeline + summary + messages.
-          Guarantees header + input always visible regardless of content size. */}
-      <div className="min-h-0 flex-1 overflow-auto">
-        {/* Progress timeline (only when spec declares fields) */}
-        {workflow.progress_timeline_fields &&
-          workflow.progress_timeline_fields.length > 0 && (
-            <ProgressTimeline
-              values={progress}
-              fields={workflow.progress_timeline_fields}
-            />
-          )}
+          Guarantees header + input always visible regardless of content size.
 
-        {/* Terminal summary card */}
+          Order:
+          - terminal: report first (the user's primary goal), then
+            timeline below as supporting / audit evidence.
+          - running: no report yet, so timeline is the only progress
+            signal — render it first. */}
+      <div className="min-h-0 flex-1 overflow-auto">
+        {/* Terminal summary card (terminal-only; rendered FIRST when present) */}
         {terminal && (
           <div className="bg-muted/50 m-3 rounded-lg border p-3 text-sm">
             {workflow.status === "done" && workflow.report_preview && (
@@ -163,6 +160,15 @@ export function WorkflowChatPanel({ parentThreadId, workflow }: Props) {
             )}
           </div>
         )}
+
+        {/* Progress timeline (only when spec declares fields) */}
+        {workflow.progress_timeline_fields &&
+          workflow.progress_timeline_fields.length > 0 && (
+            <ProgressTimeline
+              values={progress}
+              fields={workflow.progress_timeline_fields}
+            />
+          )}
 
         {/* Messages */}
         <div ref={listRef} className="space-y-2 p-3">
