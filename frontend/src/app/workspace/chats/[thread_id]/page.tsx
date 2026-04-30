@@ -27,6 +27,8 @@ import { useNotification } from "@/core/notification/hooks";
 import { useThreadSettings } from "@/core/settings";
 import { useThreadStream } from "@/core/threads/hooks";
 import { textOfMessage } from "@/core/threads/utils";
+import { useAllWorkflows } from "@/core/workflows/use-all-workflows";
+import { useNotifyParentOnWorkflowFinish } from "@/core/workflows/use-notify-parent-on-workflow-finish";
 import { env } from "@/env";
 import { cn } from "@/lib/utils";
 
@@ -45,6 +47,19 @@ export default function ChatPage() {
   }, []);
 
   const { showNotification } = useNotification();
+
+  // When a child workflow finishes in the background, the report AIMessage
+  // is appended to *this* thread's checkpoint via emit_to_parent_thread.
+  // useStream won't pick it up (no live SSE on the parent), so we watch
+  // the existing 3 s workflow-hub poll for running→terminal transitions
+  // among children of this thread, and bump the reload tick to refetch
+  // state. Same mechanism cancel uses; zero new HTTP traffic.
+  const { data: workflowsData } = useAllWorkflows();
+  const childWorkflowEntries = (
+    workflowsData?.parents.find((p) => p.thread_id === threadId)?.workflows ??
+    []
+  );
+  useNotifyParentOnWorkflowFinish(threadId, { entries: childWorkflowEntries });
 
   const [thread, sendMessage, isUploading] = useThreadStream({
     threadId,
