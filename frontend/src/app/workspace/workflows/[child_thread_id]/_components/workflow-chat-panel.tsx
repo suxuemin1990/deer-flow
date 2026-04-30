@@ -6,6 +6,8 @@ import { toast } from "sonner";
 
 import { Button } from "@/components/ui/button";
 import { Textarea } from "@/components/ui/textarea";
+import { MarkdownContent } from "@/components/workspace/messages/markdown-content";
+import { streamdownPlugins } from "@/core/streamdown";
 import { cancelActiveWorkflow } from "@/core/workflows/api";
 import type { WorkflowEntry } from "@/core/workflows/types";
 import {
@@ -142,9 +144,11 @@ export function WorkflowChatPanel({ parentThreadId, workflow }: Props) {
         {terminal && (
           <div className="bg-muted/50 m-3 rounded-lg border p-3 text-sm">
             {workflow.status === "done" && workflow.report_preview && (
-              <pre className="whitespace-pre-wrap font-sans">
-                {workflow.report_preview}
-              </pre>
+              <MarkdownContent
+                content={workflow.report_preview}
+                isLoading={false}
+                rehypePlugins={streamdownPlugins.rehypePlugins}
+              />
             )}
             {workflow.status === "failed" && (
               <span className="text-red-600">
