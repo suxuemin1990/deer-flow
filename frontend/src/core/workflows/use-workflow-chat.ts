@@ -1,4 +1,5 @@
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
+import { useMemo } from "react";
 
 import {
   fetchThreadState,
@@ -57,7 +58,14 @@ export function useWorkflowChat(
     refetchInterval: POLL_MS,
   });
 
-  const messages = extractMessages(stateQuery.data);
+  // Memoize on the data identity so messages keeps a stable reference
+  // across re-renders that don't actually change polled state. Without
+  // this, every parent re-render produces a new array, which makes
+  // downstream effects depending on `messages` re-fire forever.
+  const messages = useMemo(
+    () => extractMessages(stateQuery.data),
+    [stateQuery.data],
+  );
 
   const sendMut = useMutation({
     mutationFn: (content: string) =>

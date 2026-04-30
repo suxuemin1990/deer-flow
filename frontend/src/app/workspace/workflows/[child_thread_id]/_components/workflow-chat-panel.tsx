@@ -60,18 +60,22 @@ export function WorkflowChatPanel({ parentThreadId, workflow }: Props) {
   // instantly-dropped pending bubble.
   useEffect(() => {
     if (pendingHints.length === 0) return;
-    setPendingHints((prev) =>
-      prev.filter((p) => {
-        for (let i = p.pushedAtCount; i < messages.length; i++) {
-          const m = messages[i];
-          if (m?.role === "human" && m?.content === p.content) {
-            return false; // drop
-          }
+    const next = pendingHints.filter((p) => {
+      for (let i = p.pushedAtCount; i < messages.length; i++) {
+        const m = messages[i];
+        if (m?.role === "human" && m?.content === p.content) {
+          return false; // drop
         }
-        return true; // keep
-      }),
-    );
-  }, [messages, pendingHints.length]);
+      }
+      return true; // keep
+    });
+    // Only commit when something actually changed; otherwise we'd
+    // create a fresh array reference on every render and feed back
+    // into this effect (infinite update loop).
+    if (next.length !== pendingHints.length) {
+      setPendingHints(next);
+    }
+  }, [messages, pendingHints]);
 
   // Autoscroll to bottom on new messages
   useEffect(() => {
