@@ -52,7 +52,7 @@ export function ProgressTimeline({ values, fields }: Props) {
   if (rows.length === 0) {
     return (
       <div className="text-muted-foreground border-b p-3 text-center text-sm">
-        No progress yet.
+        暂无进度。
       </div>
     );
   }
@@ -60,7 +60,7 @@ export function ProgressTimeline({ values, fields }: Props) {
   return (
     <div className="border-b">
       <div className="text-muted-foreground px-3 pt-2 text-xs uppercase tracking-wide">
-        Progress
+        进度
       </div>
       <div
         ref={listRef}

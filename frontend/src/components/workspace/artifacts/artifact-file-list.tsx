@@ -59,11 +59,11 @@ export function ArtifactFileList({
         if (result.success) {
           toast.success(result.message);
         } else {
-          toast.error(result.message || "Failed to install skill");
+          toast.error(result.message || "安装技能失败");
         }
       } catch (error) {
         console.error("Failed to install skill:", error);
-        toast.error("Failed to install skill");
+        toast.error("安装技能失败");
       } finally {
         setInstallingFile(null);
       }
@@ -87,7 +87,7 @@ export function ArtifactFileList({
               </div>
             </CardTitle>
             <CardDescription className="min-w-0 pl-8 text-xs">
-              {getFileExtensionDisplayName(file)} file
+              {getFileExtensionDisplayName(file)} 文件
             </CardDescription>
             <CardAction className="row-span-1 self-center">
               {file.endsWith(".skill") && (

@@ -17,7 +17,7 @@ export function WorkflowLinkCard({ childThreadId, name, url }: Props) {
     >
       <ListChecksIcon className="size-5 text-blue-500" />
       <div className="flex-1">
-        <div className="text-sm font-medium">View workflow: {name}</div>
+        <div className="text-sm font-medium">查看工作流：{name}</div>
         <div className="text-muted-foreground font-mono text-xs">
           {childThreadId.slice(0, 8)}…
         </div>

@@ -29,7 +29,7 @@ export default function WorkflowDetailPage() {
 
   if (isLoading) {
     return (
-      <div className="text-muted-foreground p-4 text-sm">Loading…</div>
+      <div className="text-muted-foreground p-4 text-sm">加载中…</div>
     );
   }
 
@@ -39,12 +39,12 @@ export default function WorkflowDetailPage() {
         <div className="border-b p-3">
           <Button asChild variant="ghost" size="sm">
             <Link href="/workspace/workflows">
-              <ChevronLeftIcon className="size-4" /> Back to workflows
+              <ChevronLeftIcon className="size-4" /> 返回工作流
             </Link>
           </Button>
         </div>
         <div className="text-muted-foreground p-8 text-center text-sm">
-          Workflow not found.
+          未找到该工作流。
         </div>
       </div>
     );
@@ -55,7 +55,7 @@ export default function WorkflowDetailPage() {
       <div className="border-b p-3">
         <Button asChild variant="ghost" size="sm">
           <Link href="/workspace/workflows">
-            <ChevronLeftIcon className="size-4" /> Back to workflows
+            <ChevronLeftIcon className="size-4" /> 返回工作流
           </Link>
         </Button>
       </div>

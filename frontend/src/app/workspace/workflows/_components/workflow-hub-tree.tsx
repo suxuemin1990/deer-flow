@@ -26,7 +26,7 @@ function ParentGroup({ parent }: { parent: WorkflowParentGroup }) {
       cancelActiveWorkflow(parent.thread_id, childThreadId),
     onSuccess: () =>
       queryClient.invalidateQueries({ queryKey: ["workflows", "all"] }),
-    onError: (e: Error) => toast.error(`Cancel failed: ${e.message}`),
+    onError: (e: Error) => toast.error(`取消失败：${e.message}`),
   });
 
   const deleteMut = useMutation({
@@ -39,7 +39,7 @@ function ParentGroup({ parent }: { parent: WorkflowParentGroup }) {
     },
     onSuccess: () =>
       queryClient.invalidateQueries({ queryKey: ["workflows", "all"] }),
-    onError: (e: Error) => toast.error(`Delete failed: ${e.message}`),
+    onError: (e: Error) => toast.error(`删除失败：${e.message}`),
   });
 
   const trimmedTitle = parent.title?.trim();
@@ -65,9 +65,8 @@ function ParentGroup({ parent }: { parent: WorkflowParentGroup }) {
         )}
         <span className="font-medium">{title}</span>
         <span className="text-muted-foreground text-xs">
-          ({parent.workflows.length} workflow
-          {parent.workflows.length === 1 ? "" : "s"}
-          {activeCount > 0 ? `, ${activeCount} active` : ""})
+          ({parent.workflows.length} 个工作流
+          {activeCount > 0 ? `，${activeCount} 个进行中` : ""})
         </span>
       </Button>
       {open && (
@@ -91,12 +90,12 @@ export function WorkflowHubTree() {
   const { data, isLoading, isError, error } = useAllWorkflows();
 
   if (isLoading) {
-    return <div className="text-muted-foreground p-4 text-sm">Loading…</div>;
+    return <div className="text-muted-foreground p-4 text-sm">加载中…</div>;
   }
   if (isError) {
     return (
       <div className="p-4 text-sm text-red-500">
-        Failed to load workflows: {error.message}
+        加载工作流失败：{error.message}
       </div>
     );
   }
@@ -104,8 +103,7 @@ export function WorkflowHubTree() {
   if (parents.length === 0) {
     return (
       <div className="text-muted-foreground p-8 text-center text-sm">
-        You haven&apos;t started any workflows yet. Try asking the assistant
-        to start one in a chat (e.g. &quot;run demo-flow&quot;).
+        你还没启动过任何工作流。可以在对话中让助手启动一个（例如「run demo-flow」）。
       </div>
     );
   }

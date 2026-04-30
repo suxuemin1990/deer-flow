@@ -48,7 +48,7 @@ export function WorkspaceNavChatList() {
               href="/workspace/workflows"
             >
               <ListChecksIcon />
-              <span>{sidebarLabels.workflows ?? "Workflows"}</span>
+              <span>{sidebarLabels.workflows ?? "工作流"}</span>
             </Link>
           </SidebarMenuButton>
         </SidebarMenuItem>

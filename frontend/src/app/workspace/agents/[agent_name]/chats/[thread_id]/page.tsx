@@ -64,7 +64,7 @@ export default function AgentChatPage() {
     },
     onFinish: (state) => {
       if (document.hidden || !document.hasFocus()) {
-        let body = "Conversation finished";
+        let body = "对话已完成";
         const lastMessage = state.messages[state.messages.length - 1];
         if (lastMessage) {
           const textContent = textOfMessage(lastMessage);

@@ -64,7 +64,7 @@ export function CitationLink({
             rel="noopener noreferrer"
             className="text-primary mt-2 inline-flex items-center gap-1 text-xs hover:underline"
           >
-            Visit source
+            访问来源
             <ExternalLinkIcon className="size-3" />
           </a>
         </div>

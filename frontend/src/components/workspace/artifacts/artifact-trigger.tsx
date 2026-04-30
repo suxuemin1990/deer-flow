@@ -14,7 +14,7 @@ export const ArtifactTrigger = () => {
     return null;
   }
   return (
-    <Tooltip content="Show artifacts of this conversation">
+    <Tooltip content="查看本次对话的产物">
       <Button
         className="text-muted-foreground hover:text-foreground"
         variant="ghost"

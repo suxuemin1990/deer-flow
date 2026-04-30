@@ -114,11 +114,11 @@ export function ArtifactFileDetail({
       if (result.success) {
         toast.success(result.message);
       } else {
-        toast.error(result.message ?? "Failed to install skill");
+        toast.error(result.message ?? "安装技能失败");
       }
     } catch (error) {
       console.error("Failed to install skill:", error);
-      toast.error("Failed to install skill");
+      toast.error("安装技能失败");
     } finally {
       setIsInstalling(false);
     }
@@ -133,7 +133,7 @@ export function ArtifactFileDetail({
             ) : (
               <Select value={filepath} onValueChange={select}>
                 <SelectTrigger className="border-none bg-transparent! shadow-none select-none focus:outline-0 active:outline-0">
-                  <SelectValue placeholder="Select a file" />
+                  <SelectValue placeholder="选择文件" />
                 </SelectTrigger>
                 <SelectContent className="select-none">
                   <SelectGroup>
@@ -212,7 +212,7 @@ export function ArtifactFileDetail({
                     await navigator.clipboard.writeText(displayContent ?? "");
                     toast.success(t.clipboard.copiedToClipboard);
                   } catch (error) {
-                    toast.error("Failed to copy to clipboard");
+                    toast.error("复制到剪贴板失败");
                     console.error(error);
                   }
                 }}

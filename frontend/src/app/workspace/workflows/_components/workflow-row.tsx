@@ -36,7 +36,7 @@ function summarizeProgress(workflow: WorkflowEntry): string {
     return workflow.error.slice(0, 80);
   }
   if (workflow.status === "cancelled") {
-    return "Cancelled by user";
+    return "已被用户取消";
   }
   // running: render a few scalar progress fields. Lists/objects render
   // poorly inline (`[object Object]`) — let the detail page show those.
@@ -48,7 +48,7 @@ function summarizeProgress(workflow: WorkflowEntry): string {
       typeof v === "number" ||
       typeof v === "boolean",
   );
-  if (entries.length === 0) return "starting…";
+  if (entries.length === 0) return "启动中…";
   return entries
     .slice(0, 3)
     .map(([k, v]) => `${k}=${String(v)}`)
@@ -60,10 +60,10 @@ function relativeTime(iso: string | null): string {
   const then = Date.parse(iso);
   if (Number.isNaN(then)) return "";
   const diffSec = Math.floor((Date.now() - then) / 1000);
-  if (diffSec < 60) return `${diffSec}s ago`;
-  if (diffSec < 3600) return `${Math.floor(diffSec / 60)}m ago`;
-  if (diffSec < 86400) return `${Math.floor(diffSec / 3600)}h ago`;
-  return `${Math.floor(diffSec / 86400)}d ago`;
+  if (diffSec < 60) return `${diffSec} 秒前`;
+  if (diffSec < 3600) return `${Math.floor(diffSec / 60)} 分钟前`;
+  if (diffSec < 86400) return `${Math.floor(diffSec / 3600)} 小时前`;
+  return `${Math.floor(diffSec / 86400)} 天前`;
 }
 
 export function WorkflowRow({
@@ -94,7 +94,7 @@ export function WorkflowRow({
             size="icon"
             variant="ghost"
             className="size-7"
-            title="Cancel"
+            title="取消"
             onClick={() => onCancel(workflow.child_thread_id)}
           >
             <XIcon className="size-3.5" />
@@ -103,7 +103,7 @@ export function WorkflowRow({
         <Button asChild size="icon" variant="ghost" className="size-7">
           <Link
             href={`/workspace/chats/${encodeURIComponent(parentThreadId)}`}
-            title="Go to parent chat"
+            title="跳转到所属对话"
           >
             <ExternalLinkIcon className="size-3.5" />
           </Link>
@@ -113,7 +113,7 @@ export function WorkflowRow({
             size="icon"
             variant="ghost"
             className="size-7"
-            title="Delete"
+            title="删除"
             onClick={() => onDelete(workflow.child_thread_id)}
           >
             <TrashIcon className="size-3.5" />

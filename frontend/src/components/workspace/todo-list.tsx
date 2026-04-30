@@ -53,7 +53,7 @@ export function TodoList({
         <div className="text-muted-foreground">
           <div className="flex items-center justify-center gap-2">
             <ListTodoIcon className="size-4" />
-            <div>To-dos</div>
+            <div>待办</div>
           </div>
         </div>
         <div>

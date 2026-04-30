@@ -134,11 +134,11 @@ export function WorkflowChatPanel({ parentThreadId, workflow }: Props) {
                   workflow.child_thread_id,
                 );
               } catch (e) {
-                toast.error(`Cancel failed: ${(e as Error).message}`);
+                toast.error(`取消失败：${(e as Error).message}`);
               }
             }}
           >
-            <XIcon className="size-3.5" /> Cancel
+            <XIcon className="size-3.5" /> 取消
           </Button>
         )}
       </div>
@@ -175,13 +175,13 @@ export function WorkflowChatPanel({ parentThreadId, workflow }: Props) {
             })()}
             {workflow.status === "failed" && (
               <span className="text-red-600">
-                {workflow.error ?? "Failed"}
+                {workflow.error ?? "失败"}
               </span>
             )}
             {workflow.status === "cancelled" && (
               <span className="text-muted-foreground">
-                Cancelled by user
-                {workflow.error ? `: ${workflow.error}` : ""}
+                已被用户取消
+                {workflow.error ? `：${workflow.error}` : ""}
               </span>
             )}
           </div>
@@ -199,11 +199,11 @@ export function WorkflowChatPanel({ parentThreadId, workflow }: Props) {
         {/* Messages */}
         <div className="space-y-2 p-3">
         {isLoading && (
-          <div className="text-muted-foreground text-sm">Loading…</div>
+          <div className="text-muted-foreground text-sm">加载中…</div>
         )}
         {messages.length === 0 && !isLoading && (
           <div className="text-muted-foreground text-center text-sm">
-            No messages yet.
+            暂无消息。
           </div>
         )}
         {messages.map((m, i) => {
@@ -244,7 +244,7 @@ export function WorkflowChatPanel({ parentThreadId, workflow }: Props) {
             <div className="bg-primary text-primary-foreground max-w-[80%] rounded-lg px-3 py-2 text-sm opacity-60">
               <div className="whitespace-pre-wrap">{p.content}</div>
               <div className="mt-1 flex justify-end gap-0.5 opacity-70">
-                <span className="text-xs">sending…</span>
+                <span className="text-xs">发送中…</span>
               </div>
             </div>
           </div>
@@ -258,8 +258,8 @@ export function WorkflowChatPanel({ parentThreadId, workflow }: Props) {
           <Textarea
             placeholder={
               terminal
-                ? "Workflow has ended"
-                : "Send a message to the workflow…"
+                ? "工作流已结束"
+                : "向工作流发送消息…"
             }
             value={draft}
             onChange={(e) => setDraft(e.target.value)}
@@ -302,11 +302,11 @@ export function WorkflowChatPanel({ parentThreadId, workflow }: Props) {
               }
             }}
           >
-            Send
+            发送
           </Button>
         </div>
         <div className="text-muted-foreground mt-1 text-xs">
-          Enter to send · Shift+Enter for newline
+          Enter 发送 · Shift+Enter 换行
         </div>
       </div>
     </div>

@@ -302,21 +302,21 @@ export function MemorySettingsPage() {
   const factConfidenceInputId = useId();
   const factConfidenceHintId = useId();
 
-  const clearAllLabel = t.settings.memory.clearAll ?? "Clear all memory";
+  const clearAllLabel = t.settings.memory.clearAll ?? "清空所有记忆";
   const clearAllConfirmTitle =
-    t.settings.memory.clearAllConfirmTitle ?? "Clear all memory?";
+    t.settings.memory.clearAllConfirmTitle ?? "清空所有记忆？";
   const clearAllConfirmDescription =
     t.settings.memory.clearAllConfirmDescription ??
-    "This will remove all saved summaries and facts. This action cannot be undone.";
+    "这将删除所有已保存的摘要和事实，此操作无法撤销。";
   const clearAllSuccess =
-    t.settings.memory.clearAllSuccess ?? "All memory cleared";
+    t.settings.memory.clearAllSuccess ?? "已清空所有记忆";
   const factDeleteConfirmTitle =
-    t.settings.memory.factDeleteConfirmTitle ?? "Delete this fact?";
+    t.settings.memory.factDeleteConfirmTitle ?? "删除此条事实？";
   const factDeleteConfirmDescription =
     t.settings.memory.factDeleteConfirmDescription ??
-    "This fact will be removed from memory immediately. This action cannot be undone.";
+    "该事实将立刻从记忆中删除，此操作无法撤销。";
   const factDeleteSuccess =
-    t.settings.memory.factDeleteSuccess ?? "Fact deleted";
+    t.settings.memory.factDeleteSuccess ?? "事实已删除";
   const addFactLabel = t.settings.memory.addFact;
   const addFactTitle = t.settings.memory.addFactTitle;
   const editFactTitle = t.settings.memory.editFactTitle;
@@ -331,23 +331,23 @@ export function MemorySettingsPage() {
   const factSave = t.settings.memory.factSave;
   const factValidationContent = t.settings.memory.factValidationContent;
   const factValidationConfidence = t.settings.memory.factValidationConfidence;
-  const noFacts = t.settings.memory.noFacts ?? "No saved facts yet.";
+  const noFacts = t.settings.memory.noFacts ?? "尚无已保存的事实。";
   const summaryReadOnly = t.settings.memory.summaryReadOnly;
   const memoryFullyEmpty =
-    t.settings.memory.memoryFullyEmpty ?? "No memory saved yet.";
+    t.settings.memory.memoryFullyEmpty ?? "尚无任何记忆。";
   const factPreviewLabel =
-    t.settings.memory.factPreviewLabel ?? "Fact to delete";
+    t.settings.memory.factPreviewLabel ?? "待删除的事实";
   const searchPlaceholder =
-    t.settings.memory.searchPlaceholder ?? "Search memory";
-  const filterAll = t.settings.memory.filterAll ?? "All";
-  const filterFacts = t.settings.memory.filterFacts ?? "Facts";
-  const filterSummaries = t.settings.memory.filterSummaries ?? "Summaries";
-  const noMatches = t.settings.memory.noMatches ?? "No matching memory found";
+    t.settings.memory.searchPlaceholder ?? "搜索记忆";
+  const filterAll = t.settings.memory.filterAll ?? "全部";
+  const filterFacts = t.settings.memory.filterFacts ?? "事实";
+  const filterSummaries = t.settings.memory.filterSummaries ?? "摘要";
+  const noMatches = t.settings.memory.noMatches ?? "未找到匹配的记忆";
   const exportButton = t.settings.memory.exportButton ?? t.common.export;
   const exportSuccess =
     t.settings.memory.exportSuccess ?? t.common.exportSuccess;
   const importButton = t.settings.memory.importButton ?? t.common.import;
-  const importSuccess = t.settings.memory.importSuccess ?? "Memory imported";
+  const importSuccess = t.settings.memory.importSuccess ?? "已导入记忆";
 
   const sectionGroups = memory ? buildMemorySectionGroups(memory, t) : [];
   const filteredSectionGroups = sectionGroups
@@ -542,7 +542,7 @@ export function MemorySettingsPage() {
             {t.common.loading}
           </div>
         ) : error ? (
-          <div>Error: {error.message}</div>
+          <div>错误：{error.message}</div>
         ) : !memory ? (
           <div className="text-muted-foreground text-sm">
             {t.settings.memory.empty}

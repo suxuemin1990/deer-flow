@@ -152,13 +152,13 @@ const ChatBox: React.FC<{ children: React.ReactNode; threadId: string }> = ({
               {thread.values.artifacts?.length === 0 ? (
                 <ConversationEmptyState
                   icon={<FilesIcon />}
-                  title="No artifact selected"
-                  description="Select an artifact to view its details"
+                  title="未选择产物"
+                  description="选择一个产物以查看详情"
                 />
               ) : (
                 <div className="flex size-full max-w-(--container-width-sm) flex-col justify-center p-4 pt-8">
                   <header className="shrink-0">
-                    <h2 className="text-lg font-medium">Artifacts</h2>
+                    <h2 className="text-lg font-medium">产物</h2>
                   </header>
                   <main className="min-h-0 grow">
                     <ArtifactFileList
