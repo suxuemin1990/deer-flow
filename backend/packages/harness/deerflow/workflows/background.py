@@ -100,6 +100,21 @@ async def run_workflow_background(
     Never raises — all exceptions are caught, written to state and parent
     thread (best effort) and re-logged.
     """
+    # ---- Stream-isolation barrier ----
+    # ``start_workflow`` launches us via ``asyncio.create_task`` from inside a
+    # lead-agent tool call. Python copies the parent task's contextvars; in
+    # particular ``var_child_runnable_config`` carries the parent Pregel's
+    # ``__pregel_stream`` / ``__pregel_runtime``. If we don't scrub it,
+    # LangChain's ``ensure_config`` merges those into the child graph's
+    # effective config, LangGraph wraps the child loop in a ``DuplexStream``
+    # (langgraph/pregel/_loop.py:253), and every child-node event is forwarded
+    # into the parent SSE — users see child-workflow AIMessage bubbles flicker
+    # in the parent chat. We're a fresh logical execution; clear the inherited
+    # config so the child Pregel starts with a clean stream.
+    from langchain_core.runnables.config import var_child_runnable_config
+
+    var_child_runnable_config.set(None)
+
     graph = spec.factory(checkpointer=checkpointer)
     cfg = {"configurable": {"thread_id": child_thread_id}}
     initial = {**params, "_parent_thread_id": parent_thread_id}
