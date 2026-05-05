@@ -130,16 +130,33 @@ def _get_custom_mounts():
         return cached
     try:
         from pathlib import Path
+        from types import SimpleNamespace
 
         from deerflow.config import get_app_config
 
         config = get_app_config()
         mounts = []
-        if config.sandbox and config.sandbox.mounts:
+        if config.sandbox is not None:
+            legacy = (getattr(config.sandbox, "__pydantic_extra__", None) or {}).get("mounts") or []
+            wrapped = []
+            for m in legacy:
+                if not isinstance(m, dict):
+                    continue
+                host_path = m.get("host_path")
+                container_path = m.get("container_path")
+                if not host_path or not container_path:
+                    continue
+                wrapped.append(
+                    SimpleNamespace(
+                        host_path=host_path,
+                        container_path=container_path,
+                        read_only=bool(m.get("read_only", False)),
+                    )
+                )
             # Only include mounts whose host_path exists, consistent with
             # LocalSandboxProvider._setup_path_mappings() which also filters
             # by host_path.exists().
-            mounts = [m for m in config.sandbox.mounts if Path(m.host_path).exists()]
+            mounts = [m for m in wrapped if Path(m.host_path).exists()]
         _get_custom_mounts._cached = mounts  # type: ignore[attr-defined]
         return mounts
     except Exception:

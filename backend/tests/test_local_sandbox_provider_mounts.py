@@ -301,13 +301,15 @@ class TestLocalSandboxProviderMounts:
         custom_dir = tmp_path / "custom"
         custom_dir.mkdir()
 
-        from deerflow.config.sandbox_config import SandboxConfig, VolumeMountConfig
+        from deerflow.config.sandbox_config import SandboxConfig
 
-        sandbox_config = SandboxConfig(
-            use="deerflow.sandbox.local:LocalSandboxProvider",
-            mounts=[
-                VolumeMountConfig(host_path=str(custom_dir), container_path="/custom-skills/nested", read_only=False),
-            ],
+        sandbox_config = SandboxConfig.model_validate(
+            {
+                "use": "deerflow.sandbox.local:LocalSandboxProvider",
+                "mounts": [
+                    {"host_path": str(custom_dir), "container_path": "/custom-skills/nested", "read_only": False},
+                ],
+            }
         )
         config = SimpleNamespace(
             skills=SimpleNamespace(container_path="/custom-skills", get_skills_path=lambda: skills_dir),
@@ -323,13 +325,15 @@ class TestLocalSandboxProviderMounts:
         skills_dir = tmp_path / "skills"
         skills_dir.mkdir()
 
-        from deerflow.config.sandbox_config import SandboxConfig, VolumeMountConfig
+        from deerflow.config.sandbox_config import SandboxConfig
 
-        sandbox_config = SandboxConfig(
-            use="deerflow.sandbox.local:LocalSandboxProvider",
-            mounts=[
-                VolumeMountConfig(host_path="relative/path", container_path="/mnt/data", read_only=False),
-            ],
+        sandbox_config = SandboxConfig.model_validate(
+            {
+                "use": "deerflow.sandbox.local:LocalSandboxProvider",
+                "mounts": [
+                    {"host_path": "relative/path", "container_path": "/mnt/data", "read_only": False},
+                ],
+            }
         )
         config = SimpleNamespace(
             skills=SimpleNamespace(container_path="/mnt/skills", get_skills_path=lambda: skills_dir),
@@ -347,13 +351,15 @@ class TestLocalSandboxProviderMounts:
         custom_dir = tmp_path / "custom"
         custom_dir.mkdir()
 
-        from deerflow.config.sandbox_config import SandboxConfig, VolumeMountConfig
+        from deerflow.config.sandbox_config import SandboxConfig
 
-        sandbox_config = SandboxConfig(
-            use="deerflow.sandbox.local:LocalSandboxProvider",
-            mounts=[
-                VolumeMountConfig(host_path=str(custom_dir), container_path="mnt/data", read_only=False),
-            ],
+        sandbox_config = SandboxConfig.model_validate(
+            {
+                "use": "deerflow.sandbox.local:LocalSandboxProvider",
+                "mounts": [
+                    {"host_path": str(custom_dir), "container_path": "mnt/data", "read_only": False},
+                ],
+            }
         )
         config = SimpleNamespace(
             skills=SimpleNamespace(container_path="/mnt/skills", get_skills_path=lambda: skills_dir),
@@ -463,13 +469,15 @@ class TestLocalSandboxProviderMounts:
         custom_dir = tmp_path / "custom"
         custom_dir.mkdir()
 
-        from deerflow.config.sandbox_config import SandboxConfig, VolumeMountConfig
+        from deerflow.config.sandbox_config import SandboxConfig
 
-        sandbox_config = SandboxConfig(
-            use="deerflow.sandbox.local:LocalSandboxProvider",
-            mounts=[
-                VolumeMountConfig(host_path=str(custom_dir), container_path="/mnt/data/", read_only=False),
-            ],
+        sandbox_config = SandboxConfig.model_validate(
+            {
+                "use": "deerflow.sandbox.local:LocalSandboxProvider",
+                "mounts": [
+                    {"host_path": str(custom_dir), "container_path": "/mnt/data/", "read_only": False},
+                ],
+            }
         )
         config = SimpleNamespace(
             skills=SimpleNamespace(container_path="/mnt/skills", get_skills_path=lambda: skills_dir),

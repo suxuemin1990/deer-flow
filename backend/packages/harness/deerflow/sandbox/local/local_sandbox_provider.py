@@ -47,52 +47,61 @@ class LocalSandboxProvider(SandboxProvider):
                     )
                 )
 
-            # Map custom mounts from sandbox config
+            # Map custom mounts from sandbox config (legacy field, dict-shaped).
             _RESERVED_CONTAINER_PREFIXES = [container_path, "/mnt/acp-workspace", "/mnt/user-data"]
             sandbox_config = config.sandbox
-            if sandbox_config and sandbox_config.mounts:
-                for mount in sandbox_config.mounts:
-                    host_path = Path(mount.host_path)
-                    container_path = mount.container_path.rstrip("/") or "/"
+            legacy_mounts: list[dict] = []
+            if sandbox_config is not None:
+                legacy_mounts = (getattr(sandbox_config, "__pydantic_extra__", None) or {}).get("mounts") or []
+            for mount in legacy_mounts:
+                if not isinstance(mount, dict):
+                    continue
+                raw_host = mount.get("host_path")
+                raw_container = mount.get("container_path")
+                read_only = bool(mount.get("read_only", False))
+                if not raw_host or not raw_container:
+                    continue
+                host_path = Path(raw_host)
+                container_path = str(raw_container).rstrip("/") or "/"
 
-                    if not host_path.is_absolute():
-                        logger.warning(
-                            "Mount host_path must be absolute, skipping: %s -> %s",
-                            mount.host_path,
-                            mount.container_path,
-                        )
-                        continue
+                if not host_path.is_absolute():
+                    logger.warning(
+                        "Mount host_path must be absolute, skipping: %s -> %s",
+                        raw_host,
+                        raw_container,
+                    )
+                    continue
 
-                    if not container_path.startswith("/"):
-                        logger.warning(
-                            "Mount container_path must be absolute, skipping: %s -> %s",
-                            mount.host_path,
-                            mount.container_path,
-                        )
-                        continue
+                if not container_path.startswith("/"):
+                    logger.warning(
+                        "Mount container_path must be absolute, skipping: %s -> %s",
+                        raw_host,
+                        raw_container,
+                    )
+                    continue
 
-                    # Reject mounts that conflict with reserved container paths
-                    if any(container_path == p or container_path.startswith(p + "/") for p in _RESERVED_CONTAINER_PREFIXES):
-                        logger.warning(
-                            "Mount container_path conflicts with reserved prefix, skipping: %s",
-                            mount.container_path,
+                # Reject mounts that conflict with reserved container paths
+                if any(container_path == p or container_path.startswith(p + "/") for p in _RESERVED_CONTAINER_PREFIXES):
+                    logger.warning(
+                        "Mount container_path conflicts with reserved prefix, skipping: %s",
+                        raw_container,
+                    )
+                    continue
+                # Ensure the host path exists before adding mapping
+                if host_path.exists():
+                    mappings.append(
+                        PathMapping(
+                            container_path=container_path,
+                            local_path=str(host_path.resolve()),
+                            read_only=read_only,
                         )
-                        continue
-                    # Ensure the host path exists before adding mapping
-                    if host_path.exists():
-                        mappings.append(
-                            PathMapping(
-                                container_path=container_path,
-                                local_path=str(host_path.resolve()),
-                                read_only=mount.read_only,
-                            )
-                        )
-                    else:
-                        logger.warning(
-                            "Mount host_path does not exist, skipping: %s -> %s",
-                            mount.host_path,
-                            mount.container_path,
-                        )
+                    )
+                else:
+                    logger.warning(
+                        "Mount host_path does not exist, skipping: %s -> %s",
+                        raw_host,
+                        raw_container,
+                    )
         except Exception as e:
             # Log but don't fail if config loading fails
             logger.warning("Could not setup path mappings: %s", e, exc_info=True)

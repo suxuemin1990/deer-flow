@@ -1,7 +1,5 @@
 from abc import ABC, abstractmethod
 
-from deerflow.config import get_app_config
-from deerflow.reflection import resolve_class
 from deerflow.sandbox.sandbox import Sandbox
 
 
@@ -52,9 +50,9 @@ def get_sandbox_provider(**kwargs) -> SandboxProvider:
     """
     global _default_sandbox_provider
     if _default_sandbox_provider is None:
-        config = get_app_config()
-        cls = resolve_class(config.sandbox.use, SandboxProvider)
-        _default_sandbox_provider = cls(**kwargs)
+        from deerflow.sandbox.local.local_sandbox_provider import LocalSandboxProvider
+
+        _default_sandbox_provider = LocalSandboxProvider(**kwargs)
     return _default_sandbox_provider
 
 
