@@ -110,8 +110,8 @@ async def get_artifact(thread_id: str, path: str, request: Request, download: bo
             is always downloaded regardless of this flag.
 
     Example:
-        - Get text file inline: `/api/threads/abc123/artifacts/mnt/user-data/outputs/notes.txt`
-        - Download file: `/api/threads/abc123/artifacts/mnt/user-data/outputs/data.csv?download=true`
+        - Get text file inline: `/api/threads/abc123/artifacts/outputs/notes.txt`
+        - Download file: `/api/threads/abc123/artifacts/outputs/data.csv?download=true`
         - Active web content such as `.html`, `.xhtml`, and `.svg` artifacts is always downloaded
     """
     # Check if this is a request for a file inside a .skill archive (e.g., xxx.skill/SKILL.md)

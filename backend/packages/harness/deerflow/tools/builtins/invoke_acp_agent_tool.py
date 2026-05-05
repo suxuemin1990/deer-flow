@@ -157,7 +157,7 @@ def build_invoke_acp_agent_tool(agents: dict) -> BaseTool:
         "Available agents:\n"
         f"{agent_lines}\n\n"
         "IMPORTANT: ACP agents operate in their own independent workspace. "
-        "Do NOT include /mnt/user-data paths in the prompt. "
+        "Do NOT include workspace, uploads, or outputs paths from your own environment in the prompt. "
         "Give the agent a self-contained task description — it will produce results in its own workspace. "
         f"After the agent completes, its output files are accessible at {_ACP_WORKSPACE_VIRTUAL_PATH}/ (read-only)."
     )

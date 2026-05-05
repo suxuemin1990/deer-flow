@@ -62,10 +62,10 @@ class Paths:
         │       └── memory.json
         └── threads/
             └── {thread_id}/
-                └── user-data/         <-- mounted as /mnt/user-data/ inside sandbox
-                    ├── workspace/     <-- /mnt/user-data/workspace/
-                    ├── uploads/       <-- /mnt/user-data/uploads/
-                    └── outputs/       <-- /mnt/user-data/outputs/
+                └── user-data/
+                    ├── workspace/
+                    ├── uploads/
+                    └── outputs/
 
     BaseDir resolution (in priority order):
         1. Constructor argument `base_dir`
@@ -135,8 +135,8 @@ class Paths:
         """
         Host path for a thread's data: `{base_dir}/threads/{thread_id}/`
 
-        This directory contains a `user-data/` subdirectory that is mounted
-        as `/mnt/user-data/` inside the sandbox.
+        This directory contains a `user-data/` subdirectory that holds the
+        agent's workspace, uploads, and outputs.
 
         Raises:
             ValueError: If `thread_id` contains unsafe characters (path separators
@@ -148,7 +148,6 @@ class Paths:
         """
         Host path for the agent's workspace directory.
         Host: `{base_dir}/threads/{thread_id}/user-data/workspace/`
-        Sandbox: `/mnt/user-data/workspace/`
         """
         return self.thread_dir(thread_id) / "user-data" / "workspace"
 
@@ -156,7 +155,6 @@ class Paths:
         """
         Host path for user-uploaded files.
         Host: `{base_dir}/threads/{thread_id}/user-data/uploads/`
-        Sandbox: `/mnt/user-data/uploads/`
         """
         return self.thread_dir(thread_id) / "user-data" / "uploads"
 
@@ -164,7 +162,6 @@ class Paths:
         """
         Host path for agent-generated artifacts.
         Host: `{base_dir}/threads/{thread_id}/user-data/outputs/`
-        Sandbox: `/mnt/user-data/outputs/`
         """
         return self.thread_dir(thread_id) / "user-data" / "outputs"
 
@@ -172,10 +169,10 @@ class Paths:
         """
         Host path for the ACP workspace of a specific thread.
         Host: `{base_dir}/threads/{thread_id}/acp-workspace/`
-        Sandbox: `/mnt/acp-workspace/`
 
         Each thread gets its own isolated ACP workspace so that concurrent
-        sessions cannot read each other's ACP agent outputs.
+        sessions cannot read each other's ACP agent outputs. The ACP container
+        sees this directory mounted at `/mnt/acp-workspace/`.
         """
         return self.thread_dir(thread_id) / "acp-workspace"
 
@@ -183,7 +180,6 @@ class Paths:
         """
         Host path for the user-data root.
         Host: `{base_dir}/threads/{thread_id}/user-data/`
-        Sandbox: `/mnt/user-data/`
         """
         return self.thread_dir(thread_id) / "user-data"
 

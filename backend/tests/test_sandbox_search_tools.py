@@ -1,5 +1,4 @@
 from types import SimpleNamespace
-from unittest.mock import patch
 
 from deerflow.sandbox.local_sandbox import LocalSandbox
 from deerflow.sandbox.search import find_glob_matches, find_grep_matches
@@ -25,7 +24,7 @@ def _make_runtime(tmp_path):
     )
 
 
-def test_glob_tool_returns_virtual_paths_and_ignores_common_dirs(tmp_path, monkeypatch) -> None:
+def test_glob_tool_returns_host_paths_and_ignores_common_dirs(tmp_path, monkeypatch) -> None:
     runtime = _make_runtime(tmp_path)
     workspace = tmp_path / "workspace"
     (workspace / "app.py").write_text("print('hi')\n", encoding="utf-8")
@@ -40,42 +39,38 @@ def test_glob_tool_returns_virtual_paths_and_ignores_common_dirs(tmp_path, monke
         runtime=runtime,
         description="find python files",
         pattern="**/*.py",
-        path="/mnt/user-data/workspace",
+        path=str(workspace),
     )
 
-    assert "/mnt/user-data/workspace/app.py" in result
-    assert "/mnt/user-data/workspace/pkg/util.py" in result
+    assert str(workspace / "app.py") in result
+    assert str(workspace / "pkg" / "util.py") in result
     assert "node_modules" not in result
-    assert str(workspace) not in result
 
 
-def test_glob_tool_supports_skills_virtual_paths(tmp_path, monkeypatch) -> None:
+def test_glob_tool_works_against_arbitrary_host_directory(tmp_path, monkeypatch) -> None:
     runtime = _make_runtime(tmp_path)
     skills_dir = tmp_path / "skills"
     (skills_dir / "public" / "demo").mkdir(parents=True)
-    (skills_dir / "public" / "demo" / "SKILL.md").write_text("# Demo\n", encoding="utf-8")
+    skill_file = skills_dir / "public" / "demo" / "SKILL.md"
+    skill_file.write_text("# Demo\n", encoding="utf-8")
 
     monkeypatch.setattr("deerflow.sandbox.tools.ensure_sandbox_initialized", lambda runtime: LocalSandbox(id="local"))
 
-    with (
-        patch("deerflow.sandbox.tools._get_skills_container_path", return_value="/mnt/skills"),
-        patch("deerflow.sandbox.tools._get_skills_host_path", return_value=str(skills_dir)),
-    ):
-        result = glob_tool.func(
-            runtime=runtime,
-            description="find skills",
-            pattern="**/SKILL.md",
-            path="/mnt/skills",
-        )
+    result = glob_tool.func(
+        runtime=runtime,
+        description="find skills",
+        pattern="**/SKILL.md",
+        path=str(skills_dir),
+    )
 
-    assert "/mnt/skills/public/demo/SKILL.md" in result
-    assert str(skills_dir) not in result
+    assert str(skill_file) in result
 
 
 def test_grep_tool_filters_by_glob_and_skips_binary_files(tmp_path, monkeypatch) -> None:
     runtime = _make_runtime(tmp_path)
     workspace = tmp_path / "workspace"
-    (workspace / "main.py").write_text("TODO = 'ship it'\nprint(TODO)\n", encoding="utf-8")
+    main_py = workspace / "main.py"
+    main_py.write_text("TODO = 'ship it'\nprint(TODO)\n", encoding="utf-8")
     (workspace / "notes.txt").write_text("TODO in txt should be filtered\n", encoding="utf-8")
     (workspace / "image.bin").write_bytes(b"\0binary TODO")
 
@@ -85,14 +80,13 @@ def test_grep_tool_filters_by_glob_and_skips_binary_files(tmp_path, monkeypatch)
         runtime=runtime,
         description="find todo references",
         pattern="TODO",
-        path="/mnt/user-data/workspace",
+        path=str(workspace),
         glob="**/*.py",
     )
 
-    assert "/mnt/user-data/workspace/main.py:1: TODO = 'ship it'" in result
+    assert f"{main_py}:1: TODO = 'ship it'" in result
     assert "notes.txt" not in result
     assert "image.bin" not in result
-    assert str(workspace) not in result
 
 
 def test_grep_tool_truncates_results(tmp_path, monkeypatch) -> None:
@@ -108,11 +102,11 @@ def test_grep_tool_truncates_results(tmp_path, monkeypatch) -> None:
         runtime=runtime,
         description="limit matches",
         pattern="TODO",
-        path="/mnt/user-data/workspace",
+        path=str(workspace),
         max_results=2,
     )
 
-    assert "Found 2 matches under /mnt/user-data/workspace (showing first 2)" in result
+    assert f"Found 2 matches under {workspace} (showing first 2)" in result
     assert "TODO one" in result
     assert "TODO two" in result
     assert "TODO three" not in result
@@ -133,7 +127,7 @@ def test_glob_tool_include_dirs_filters_nested_ignored_paths(tmp_path, monkeypat
         runtime=runtime,
         description="find dirs",
         pattern="**",
-        path="/mnt/user-data/workspace",
+        path=str(workspace),
         include_dirs=True,
     )
 
@@ -153,7 +147,7 @@ def test_grep_tool_literal_mode(tmp_path, monkeypatch) -> None:
         runtime=runtime,
         description="literal search",
         pattern="(a+b)",
-        path="/mnt/user-data/workspace",
+        path=str(workspace),
         literal=True,
     )
 
@@ -172,7 +166,7 @@ def test_grep_tool_case_sensitive(tmp_path, monkeypatch) -> None:
         runtime=runtime,
         description="case sensitive search",
         pattern="TODO",
-        path="/mnt/user-data/workspace",
+        path=str(workspace),
         case_sensitive=True,
     )
 
@@ -182,6 +176,7 @@ def test_grep_tool_case_sensitive(tmp_path, monkeypatch) -> None:
 
 def test_grep_tool_invalid_regex_returns_error(tmp_path, monkeypatch) -> None:
     runtime = _make_runtime(tmp_path)
+    workspace = tmp_path / "workspace"
 
     monkeypatch.setattr("deerflow.sandbox.tools.ensure_sandbox_initialized", lambda runtime: LocalSandbox(id="local"))
 
@@ -189,7 +184,7 @@ def test_grep_tool_invalid_regex_returns_error(tmp_path, monkeypatch) -> None:
         runtime=runtime,
         description="bad pattern",
         pattern="[invalid",
-        path="/mnt/user-data/workspace",
+        path=str(workspace),
     )
 
     assert "Invalid regex pattern" in result
@@ -247,21 +242,21 @@ def test_glob_tool_honors_smaller_requested_max_results(tmp_path, monkeypatch) -
         runtime=runtime,
         description="limit glob matches",
         pattern="**/*.py",
-        path="/mnt/user-data/workspace",
+        path=str(workspace),
         max_results=2,
     )
 
-    assert "Found 2 paths under /mnt/user-data/workspace (showing first 2)" in result
+    assert f"Found 2 paths under {workspace} (showing first 2)" in result
     assert "Results truncated." in result
 
 
 # ---------------------------------------------------------------------------
-# ls_tool — path masking
+# ls_tool — basic listing on host paths
 # ---------------------------------------------------------------------------
 
 
-def test_ls_tool_masks_user_data_host_paths(tmp_path, monkeypatch) -> None:
-    """ls_tool output must not leak host user-data paths; they should be virtual."""
+def test_ls_tool_lists_host_workspace(tmp_path, monkeypatch) -> None:
+    """ls_tool returns the directory contents for a real host path."""
     runtime = _make_runtime(tmp_path)
     workspace = tmp_path / "workspace"
     (workspace / "report.txt").write_text("hello\n", encoding="utf-8")
@@ -272,18 +267,15 @@ def test_ls_tool_masks_user_data_host_paths(tmp_path, monkeypatch) -> None:
     result = ls_tool.func(
         runtime=runtime,
         description="list workspace",
-        path="/mnt/user-data/workspace",
+        path=str(workspace),
     )
 
-    # Virtual paths must be present
-    assert "/mnt/user-data/workspace" in result
-    # Host paths must NOT leak
-    assert str(workspace) not in result
-    assert str(tmp_path) not in result
+    assert "report.txt" in result
+    assert "subdir" in result
 
 
-def test_ls_tool_masks_skills_host_paths(tmp_path, monkeypatch) -> None:
-    """ls_tool output must not leak host skills paths; they should be virtual."""
+def test_ls_tool_lists_arbitrary_host_directory(tmp_path, monkeypatch) -> None:
+    """ls_tool works for any host path (including former skills mounts)."""
     runtime = _make_runtime(tmp_path)
     skills_dir = tmp_path / "skills"
     (skills_dir / "public").mkdir(parents=True)
@@ -291,33 +283,26 @@ def test_ls_tool_masks_skills_host_paths(tmp_path, monkeypatch) -> None:
 
     monkeypatch.setattr("deerflow.sandbox.tools.ensure_sandbox_initialized", lambda runtime: LocalSandbox(id="local"))
 
-    with (
-        patch("deerflow.sandbox.tools._get_skills_container_path", return_value="/mnt/skills"),
-        patch("deerflow.sandbox.tools._get_skills_host_path", return_value=str(skills_dir)),
-    ):
-        result = ls_tool.func(
-            runtime=runtime,
-            description="list skills",
-            path="/mnt/skills",
-        )
+    result = ls_tool.func(
+        runtime=runtime,
+        description="list skills",
+        path=str(skills_dir),
+    )
 
-    # Virtual paths must be present
-    assert "/mnt/skills" in result
-    # Host paths must NOT leak
-    assert str(skills_dir) not in result
-    assert str(tmp_path) not in result
+    assert "public" in result
 
 
 def test_ls_tool_returns_empty_for_empty_directory(tmp_path, monkeypatch) -> None:
     """ls_tool should return '(empty)' for an empty directory."""
     runtime = _make_runtime(tmp_path)
+    workspace = tmp_path / "workspace"
 
     monkeypatch.setattr("deerflow.sandbox.tools.ensure_sandbox_initialized", lambda runtime: LocalSandbox(id="local"))
 
     result = ls_tool.func(
         runtime=runtime,
         description="list empty dir",
-        path="/mnt/user-data/workspace",
+        path=str(workspace),
     )
 
     assert result == "(empty)"

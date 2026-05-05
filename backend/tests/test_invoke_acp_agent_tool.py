@@ -131,7 +131,7 @@ async def test_build_invoke_tool_description_and_unknown_agent_error():
     assert "Available agents:" in tool.description
     assert "- codex: Codex CLI" in tool.description
     assert "- claude_code: Claude Code" in tool.description
-    assert "Do NOT include /mnt/user-data paths" in tool.description
+    assert "Do NOT include workspace, uploads, or outputs paths" in tool.description
     assert "/mnt/acp-workspace/" in tool.description
 
     result = await tool.coroutine(agent="missing", prompt="do work")
