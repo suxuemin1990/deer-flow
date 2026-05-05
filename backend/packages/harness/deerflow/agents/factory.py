@@ -196,11 +196,9 @@ def _assemble_from_features(
         else:
             from deerflow.agents.middlewares.thread_data_middleware import ThreadDataMiddleware
             from deerflow.agents.middlewares.uploads_middleware import UploadsMiddleware
-            from deerflow.sandbox.middleware import SandboxMiddleware
 
             chain.append(ThreadDataMiddleware(lazy_init=True))
             chain.append(UploadsMiddleware())
-            chain.append(SandboxMiddleware(lazy_init=True))
 
     # --- [3] DanglingToolCall (always) ---
     chain.append(DanglingToolCallMiddleware())

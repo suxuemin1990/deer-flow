@@ -83,7 +83,7 @@ def test_features_mode(mock_create_agent):
     assert len(middleware) > 0
     mw_types = [type(m).__name__ for m in middleware]
     assert "ThreadDataMiddleware" in mw_types
-    assert "SandboxMiddleware" in mw_types
+    assert "SandboxMiddleware" not in mw_types
     assert "TitleMiddleware" in mw_types
     assert "ClarificationMiddleware" in mw_types
 
@@ -736,7 +736,6 @@ def test_full_chain_order(mock_create_agent):
     expected_order = [
         "ThreadDataMiddleware",
         "UploadsMiddleware",
-        "SandboxMiddleware",
         "DanglingToolCallMiddleware",
         "MyGuardrail",
         "ToolErrorHandlingMiddleware",
