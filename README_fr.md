@@ -55,7 +55,7 @@ DeerFlow intègre désormais le toolkit de recherche et de crawling intelligent 
       - [Option 1 : Docker (recommandé)](#option-1--docker-recommandé)
       - [Option 2 : Développement local](#option-2--développement-local)
     - [Avancé](#avancé)
-      - [Mode Sandbox](#mode-sandbox)
+      - [Modèle d'exécution](#modèle-dexécution)
       - [Serveur MCP](#serveur-mcp)
       - [Canaux de messagerie](#canaux-de-messagerie)
       - [Traçage LangSmith](#traçage-langsmith)
@@ -214,7 +214,7 @@ make docker-init    # Pull sandbox image (only once or when image updates)
 make docker-start   # Start services (auto-detects sandbox mode from config.yaml)
 ```
 
-`make docker-start` ne lance `provisioner` que si `config.yaml` utilise le mode provisioner (`sandbox.use: deerflow.community.aio_sandbox:AioSandboxProvider` avec `provisioner_url`).
+`make docker-start` ne lance `provisioner` que si `config.yaml` configure un `provisioner_url`. DeerFlow exécute les outils directement sur l'hôte ; pour la production, exécutez le harness lui-même dans un conteneur ou une VM.
 Les processus backend récupèrent automatiquement les changements dans `config.yaml` au prochain accès à la configuration, donc les mises à jour de métadonnées des modèles ne nécessitent pas de redémarrage manuel en développement.
 
 > [!TIP]
@@ -264,16 +264,9 @@ Prérequis : complétez d'abord les étapes de « Configuration » ci-dessus (`m
 5. **Accès** : http://localhost:2026
 
 ### Avancé
-#### Mode Sandbox
+#### Modèle d'exécution
 
-DeerFlow supporte plusieurs modes d'exécution sandbox :
-- **Exécution locale** (exécute le code sandbox directement sur la machine hôte)
-- **Exécution Docker** (exécute le code sandbox dans des conteneurs Docker isolés)
-- **Exécution Docker avec Kubernetes** (exécute le code sandbox dans des pods Kubernetes via le service provisioner)
-
-En développement Docker, le démarrage des services suit le mode sandbox défini dans `config.yaml`. En mode Local/Docker, `provisioner` n'est pas démarré.
-
-Voir le [Guide de configuration Sandbox](backend/docs/CONFIGURATION.md#sandbox) pour configurer le mode de votre choix.
+DeerFlow exécute les outils (bash, E/S fichier, recherche) directement dans le processus hôte. Le harness n'embarque plus d'isolation sandbox ; pour les déploiements de production, exécutez DeerFlow lui-même dans un conteneur ou une VM.
 
 #### Serveur MCP
 
@@ -436,15 +429,15 @@ Les outils suivent la même philosophie. DeerFlow est livré avec un ensemble d'
 Les suggestions de suivi générées par le Gateway normalisent désormais aussi bien la sortie texte brut du modèle que le contenu riche au format bloc/liste avant de parser la réponse en tableau JSON, de sorte que les wrappers de contenu propres à chaque provider ne suppriment plus silencieusement les suggestions.
 
 ```
-# Paths inside the sandbox container
-/mnt/skills/public
+# Skills layout on the host
+skills/public/
 ├── research/SKILL.md
 ├── report-generation/SKILL.md
 ├── slide-creation/SKILL.md
 ├── web-page/SKILL.md
 └── image-generation/SKILL.md
 
-/mnt/skills/custom
+skills/custom/
 └── your-custom-skill/SKILL.md      ← yours
 ```
 
@@ -489,13 +482,15 @@ C'est comme ça que DeerFlow gère les tâches qui prennent de quelques minutes 
 
 DeerFlow ne se contente pas de *parler* de faire les choses. Il dispose de son propre ordinateur.
 
-Chaque tâche s'exécute dans un conteneur Docker isolé avec un système de fichiers complet — skills, workspace, uploads, outputs. L'agent lit, écrit et édite des fichiers. Il exécute des commandes bash et du code. Il visualise des images. Le tout sandboxé, le tout auditable, zéro contamination entre les sessions.
+Chaque tâche dispose de son propre workspace par thread sur l'hôte — skills, workspace, uploads, outputs. L'agent lit, écrit et édite des fichiers. Il exécute des commandes bash et du code. Il visualise des images.
+
+DeerFlow exécute les outils directement sur l'hôte. Le harness n'embarque plus d'isolation sandbox ; pour les déploiements de production, exécutez DeerFlow lui-même dans un conteneur ou une VM.
 
 C'est la différence entre un chatbot avec accès à des outils et un agent doté d'un véritable environnement d'exécution.
 
 ```
-# Paths inside the sandbox container
-/mnt/user-data/
+# Per-thread workspace layout on the host
+<thread workspace>/
 ├── uploads/          ← your files
 ├── workspace/        ← agents' working directory
 └── outputs/          ← final deliverables
@@ -579,7 +574,7 @@ DeerFlow dispose de capacités clés à hauts privilèges, notamment **l'exécut
 
 Les contributions sont les bienvenues ! Consultez [CONTRIBUTING.md](CONTRIBUTING.md) pour la mise en place de l'environnement de développement, le workflow et les conventions.
 
-La couverture de tests de régression inclut la détection du mode sandbox Docker et les tests de gestion du kubeconfig-path du provisioner dans `backend/tests/`.
+La couverture de tests de régression inclut les tests de gestion du kubeconfig-path du provisioner dans `backend/tests/`.
 
 ## Licence
 

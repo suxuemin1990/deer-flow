@@ -144,7 +144,6 @@ make_lead_agent(config)
   └─> _build_middlewares(config)
         │
         ├─> ThreadDataMiddleware
-        ├─> SandboxMiddleware
         ├─> SummarizationMiddleware (if enabled via global config)
         ├─> TodoListMiddleware (if is_plan_mode=True) ← NEW
         ├─> TitleMiddleware

@@ -50,13 +50,13 @@ create_agent(model, tools, middleware, system_prompt, state_schema=ThreadState)
 |---|---|---|
 | 1 | `ThreadDataMiddleware` | 解析 `thread_id`,挂载 `workspace_path / uploads_path / outputs_path` |
 | 2 | `UploadsMiddleware` | (可选)把用户上传文件挂进沙箱,大纲注入上下文 |
-| 3 | `SandboxMiddleware` | 懒启动沙箱,把 `sandbox_id` 写入 state |
+| 3 | ~~`SandboxMiddleware`~~ | (removed; tools now run directly on the host) |
 | 4 | `DanglingToolCallMiddleware` | 修补历史中无 `ToolMessage` 配对的 `tool_calls`,避免 LLM 报错 |
 | 5 | `LLMErrorHandlingMiddleware` | 包住模型调用异常,转成可恢复的消息 |
 | 6 | `GuardrailMiddleware`(可选) | 输入 / 输出合规检测 |
-| 7 | `SandboxAuditMiddleware` | 沙箱命令审计 / 拦截 |
+| 7 | ~~`SandboxAuditMiddleware`~~ | (removed) |
 | 8 | `ToolErrorHandlingMiddleware` | 把工具异常转成 `ToolMessage`(否则 LLM 卡住) |
-| 9 | `DeerFlowSummarizationMiddleware`(可选) | 上下文超阈值时压缩历史,对 `/mnt/skills` 文件读取做特殊保留 |
+| 9 | `DeerFlowSummarizationMiddleware`(可选) | 上下文超阈值时压缩历史,对 skill 文件读取做特殊保留 |
 | 10 | `TodoMiddleware`(plan 模式) | 注入 `write_todos` 工具 + 任务追踪 prompt |
 | 11 | `TokenUsageMiddleware`(可选) | 统计 prompt / completion tokens |
 | 12 | `TitleMiddleware` | 首轮对话后异步生成会话标题 |
@@ -138,7 +138,7 @@ class DisconnectMode(StrEnum):  # cancel | continue_   SSE 客户端断开后是
 
 `Sandbox` 抽象基类定义 agent 可见的操作:`execute_command / read_file / write_file / list_dir / glob / grep`。
 
-**虚拟路径系统**(`config/paths.py`):agent 只看到 `/mnt/user-data/...`;`Paths` 类(`get_paths(thread_id)`)把它翻译成宿主机的 `.deer-flow/<thread_id>/uploads/foo.pdf`。`/mnt/skills` 是技能挂载点。这种抽象让本地模式和远程沙箱模式对 agent 完全透明。
+**主机路径**(`config/paths.py`):agent 看到的是真实的宿主机路径；`Paths` 类(`get_paths(thread_id)`)计算 `.deer-flow/<thread_id>/uploads/foo.pdf` 等实际路径，没有虚拟路径翻译。Skill 文件从 `skills.path` 下直接读取。
 
 ### 2.6 Skills — `skills/types.py`
 
@@ -151,7 +151,7 @@ class DisconnectMode(StrEnum):  # cancel | continue_   SSE 客户端断开后是
 | `relative_path / category` | 相对路径 + `public` 或 `custom` |
 | `enabled` | 是否启用 |
 
-方法 `get_container_path` 返回 `/mnt/skills/<category>/<path>`。
+方法 `get_container_path` 返回相对于 skills 根目录的路径。
 
 > 代码中**没有** `SkillPack` 类型,字面意义的"技能包"就是 `Skill` + 它所在目录里的资源文件。
 

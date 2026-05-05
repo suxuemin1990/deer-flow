@@ -1,27 +1,28 @@
 # Middleware 执行流程
 
+> **Note:** The Mermaid sequence diagrams below still reference `SandboxMiddleware` for historical context. As of the sandbox-isolation removal, that middleware has been deleted from the live chain — see the updated middleware table immediately below.
+
 ## Middleware 列表
 
 `create_deerflow_agent` 通过 `RuntimeFeatures` 组装的完整 middleware 链（默认全开时）：
 
 | # | Middleware | `before_agent` | `before_model` | `after_model` | `after_agent` | `wrap_tool_call` | 主 Agent | Subagent | 来源 |
 |---|-----------|:-:|:-:|:-:|:-:|:-:|:-:|:-:|------|
-| 0 | ThreadDataMiddleware | ✓ | | | | | ✓ | ✓ | `sandbox` |
-| 1 | UploadsMiddleware | ✓ | | | | | ✓ | ✗ | `sandbox` |
-| 2 | SandboxMiddleware | ✓ | | | ✓ | | ✓ | ✓ | `sandbox` |
-| 3 | DanglingToolCallMiddleware | | | ✓ | | | ✓ | ✗ | 始终开启 |
-| 4 | GuardrailMiddleware | | | | | ✓ | ✓ | ✓ | *Phase 2 纳入* |
-| 5 | ToolErrorHandlingMiddleware | | | | | ✓ | ✓ | ✓ | 始终开启 |
-| 6 | SummarizationMiddleware | | | ✓ | | | ✓ | ✗ | `summarization` |
-| 7 | TodoMiddleware | | | ✓ | | | ✓ | ✗ | `plan_mode` 参数 |
-| 8 | TitleMiddleware | | | ✓ | | | ✓ | ✗ | `auto_title` |
-| 9 | MemoryMiddleware | | | | ✓ | | ✓ | ✗ | `memory` |
-| 10 | ViewImageMiddleware | | ✓ | | | | ✓ | ✗ | `vision` |
-| 11 | SubagentLimitMiddleware | | | ✓ | | | ✓ | ✗ | `subagent` |
-| 12 | LoopDetectionMiddleware | | | ✓ | | | ✓ | ✗ | 始终开启 |
-| 13 | ClarificationMiddleware | | | ✓ | | | ✓ | ✗ | 始终最后 |
+| 0 | ThreadDataMiddleware | ✓ | | | | | ✓ | ✓ | 始终开启 |
+| 1 | UploadsMiddleware | ✓ | | | | | ✓ | ✗ | 始终开启 |
+| 2 | DanglingToolCallMiddleware | | | ✓ | | | ✓ | ✗ | 始终开启 |
+| 3 | GuardrailMiddleware | | | | | ✓ | ✓ | ✓ | *Phase 2 纳入* |
+| 4 | ToolErrorHandlingMiddleware | | | | | ✓ | ✓ | ✓ | 始终开启 |
+| 5 | SummarizationMiddleware | | | ✓ | | | ✓ | ✗ | `summarization` |
+| 6 | TodoMiddleware | | | ✓ | | | ✓ | ✗ | `plan_mode` 参数 |
+| 7 | TitleMiddleware | | | ✓ | | | ✓ | ✗ | `auto_title` |
+| 8 | MemoryMiddleware | | | | ✓ | | ✓ | ✗ | `memory` |
+| 9 | ViewImageMiddleware | | ✓ | | | | ✓ | ✗ | `vision` |
+| 10 | SubagentLimitMiddleware | | | ✓ | | | ✓ | ✗ | `subagent` |
+| 11 | LoopDetectionMiddleware | | | ✓ | | | ✓ | ✗ | 始终开启 |
+| 12 | ClarificationMiddleware | | | ✓ | | | ✓ | ✗ | 始终最后 |
 
-主 agent **14 个** middleware（`make_lead_agent`），subagent **4 个**（ThreadData、Sandbox、Guardrail、ToolErrorHandling）。`create_deerflow_agent` Phase 1 实现 **13 个**（Guardrail 仅支持自定义实例，无内置默认）。
+主 agent **13 个** middleware（`make_lead_agent`），subagent **3 个**（ThreadData、Guardrail、ToolErrorHandling）。`create_deerflow_agent` Phase 1 实现 **12 个**（Guardrail 仅支持自定义实例，无内置默认）。
 
 ## 执行流程
 
@@ -260,12 +261,11 @@ sequenceDiagram
 ```
 
 > [!warning] 不是洋葱
-> 14 个 middleware 中只有 SandboxMiddleware 有 before/after 对称（获取/释放）。其余都是单向的：要么只在 `before_*` 做事，要么只在 `after_*` 做事。`before_agent` / `after_agent` 只跑一次，`before_model` / `after_model` 每轮循环都跑。
+> 13 个 middleware 中都是单向的：要么只在 `before_*` 做事，要么只在 `after_*` 做事。`before_agent` / `after_agent` 只跑一次，`before_model` / `after_model` 每轮循环都跑。
 
-硬依赖只有 2 处：
+硬依赖只有 1 处：
 
-1. **ThreadData 在 Sandbox 之前** — sandbox 需要线程目录
-2. **Clarification 在列表最后** — `after_model` 反序时最先执行，第一个拦截 `ask_clarification`
+1. **Clarification 在列表最后** — `after_model` 反序时最先执行，第一个拦截 `ask_clarification`
 
 ### 结论
 
@@ -282,10 +282,6 @@ sequenceDiagram
 
 位置最后 = `after_model` 最先执行。它需要**第一个**看到 model 输出，检查是否有 `ask_clarification` tool call。如果有，立即中断（`Command(goto=END)`），后续 middleware 的 `after_model` 不再执行。
 
-### SandboxMiddleware 的对称性
-
-`before_agent`（正序第 3 个）获取沙箱，`after_agent`（反序第 1 个）释放沙箱。外层进入 → 外层退出，天然的洋葱对称。
-
 ### 大部分 middleware 只用一个钩子
 
-14 个 middleware 中，只有 SandboxMiddleware 同时用了 `before_agent` + `after_agent`（获取/释放）。其余都只在一个阶段执行。洋葱模型的反序特性主要影响 `after_model` 阶段的执行顺序。
+13 个 middleware 都只在一个阶段执行。洋葱模型的反序特性主要影响 `after_model` 阶段的执行顺序。

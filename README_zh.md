@@ -44,7 +44,7 @@ https://github.com/user-attachments/assets/a8bcadc4-e040-4cf2-8fda-dd768b999c18
       - [方式一：Docker（推荐）](#方式一docker推荐)
       - [方式二：本地开发](#方式二本地开发)
     - [进阶配置](#进阶配置)
-      - [Sandbox 模式](#sandbox-模式)
+      - [执行模式](#执行模式)
       - [MCP Server](#mcp-server)
       - [IM 渠道](#im-渠道)
       - [LangSmith 链路追踪](#langsmith-链路追踪)
@@ -174,7 +174,7 @@ make docker-init    # 拉取 sandbox 镜像（首次运行或镜像更新时执�
 make docker-start   # 启动服务（会根据 config.yaml 自动判断 sandbox 模式）
 ```
 
-如果 `config.yaml` 使用的是 provisioner 模式（`sandbox.use: deerflow.community.aio_sandbox:AioSandboxProvider` 且配置了 `provisioner_url`），`make docker-start` 才会启动 `provisioner`。
+如果 `config.yaml` 配置了 `provisioner_url`，`make docker-start` 才会启动 `provisioner`。DeerFlow 直接在宿主机上运行工具；生产部署请将 harness 本身运行在容器或虚拟机内。
 
 **生产模式**（本地构建镜像，并挂载运行期配置与数据）：
 
@@ -221,16 +221,9 @@ make down   # 停止并移除容器
 5. **访问地址**：http://localhost:2026
 
 ### 进阶配置
-#### Sandbox 模式
+#### 执行模式
 
-DeerFlow 支持多种 sandbox 执行方式：
-- **本地执行**（直接在宿主机上运行 sandbox 代码）
-- **Docker 执行**（在隔离的 Docker 容器里运行 sandbox 代码）
-- **Docker + Kubernetes 执行**（通过 provisioner 服务在 Kubernetes Pod 中运行 sandbox 代码）
-
-Docker 开发时，服务启动行为会遵循 `config.yaml` 里的 sandbox 模式。在 Local / Docker 模式下，不会启动 `provisioner`。
-
-如果要配置你自己的模式，参见 [Sandbox 配置指南](backend/docs/CONFIGURATION.md#sandbox)。
+DeerFlow 在宿主机进程中直接运行工具（bash、文件 I/O、搜索）。harness 不再提供 sandbox 隔离；生产部署请将 DeerFlow 本身运行在容器或虚拟机内。
 
 #### MCP Server
 
@@ -415,15 +408,15 @@ Tools 也是同样的思路。DeerFlow 自带一组核心工具：网页搜索�
 Gateway 生成后续建议时，现在会先把普通字符串输出和 block/list 风格的富文本内容统一归一化，再去解析 JSON 数组响应，因此不同 provider 的内容包装方式不会再悄悄把建议吞掉。
 
 ```text
-# sandbox 容器内的路径
-/mnt/skills/public
+# Skills layout on the host
+skills/public/
 ├── research/SKILL.md
 ├── report-generation/SKILL.md
 ├── slide-creation/SKILL.md
 ├── web-page/SKILL.md
 └── image-generation/SKILL.md
 
-/mnt/skills/custom
+skills/custom/
 └── your-custom-skill/SKILL.md      ← 你的 skill
 ```
 
@@ -468,13 +461,15 @@ lead agent 可以按需动态拉起 sub-agents。每个 sub-agent 都有自己�
 
 DeerFlow 不只是“会说它能做”，它是真的有一台自己的“电脑”。
 
-每个任务都运行在隔离的 Docker 容器里，里面有完整的文件系统，包括 skills、workspace、uploads、outputs。agent 可以读写和编辑文件，可以执行 bash 命令和代码，也可以查看图片。整个过程都在 sandbox 内完成，可审计、会隔离，不会在不同 session 之间互相污染。
+每个任务都在宿主机的独立每-线程 workspace 中运行，里面有完整的文件系统，包括 skills、workspace、uploads、outputs。agent 可以读写和编辑文件，可以执行 bash 命令和代码，也可以查看图片。
+
+DeerFlow 直接在宿主机上运行工具。harness 不再提供 sandbox 隔离；生产部署请将 DeerFlow 本身运行在容器或虚拟机内。
 
 这就是“带工具的聊天机器人”和“真正有执行环境的 agent”之间的差别。
 
 ```text
-# sandbox 容器内的路径
-/mnt/user-data/
+# Per-thread workspace layout on the host
+<thread workspace>/
 ├── uploads/          ← 你的文件
 ├── workspace/        ← agents 的工作目录
 └── outputs/          ← 最终交付物
@@ -556,7 +551,7 @@ DeerFlow 具备**系统指令执行、资源操作、业务逻辑调用**等关�
 
 欢迎参与贡献。开发环境、工作流和相关规范见 [CONTRIBUTING.md](CONTRIBUTING.md)。
 
-目前回归测试已经覆盖 Docker sandbox 模式识别，以及 `backend/tests/` 中 provisioner kubeconfig-path 处理相关测试。
+目前回归测试已经覆盖 `backend/tests/` 中的 provisioner kubeconfig-path 处理相关测试。
 
 ## 许可证
 

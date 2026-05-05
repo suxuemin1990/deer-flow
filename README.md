@@ -57,7 +57,7 @@ DeerFlow has newly integrated the intelligent search and crawling toolset indepe
       - [Option 1: Docker (Recommended)](#option-1-docker-recommended)
       - [Option 2: Local Development](#option-2-local-development)
     - [Advanced](#advanced)
-      - [Sandbox Mode](#sandbox-mode)
+      - [Execution Model](#execution-model)
       - [MCP Server](#mcp-server)
       - [IM Channels](#im-channels)
       - [LangSmith Tracing](#langsmith-tracing)
@@ -227,7 +227,7 @@ make docker-init    # Pull sandbox image (only once or when image updates)
 make docker-start   # Start services (auto-detects sandbox mode from config.yaml)
 ```
 
-`make docker-start` starts `provisioner` only when `config.yaml` uses provisioner mode (`sandbox.use: deerflow.community.aio_sandbox:AioSandboxProvider` with `provisioner_url`).
+`make docker-start` starts `provisioner` only when `config.yaml` configures a `provisioner_url`. DeerFlow runs tools directly on the host; for production, run the harness itself inside a container or VM.
 
 Docker builds use the upstream `uv` registry by default. If you need faster mirrors in restricted networks, export `UV_INDEX_URL=https://pypi.tuna.tsinghua.edu.cn/simple` and `NPM_REGISTRY=https://registry.npmmirror.com` before running `make docker-init` or `make docker-start`.
 
@@ -342,16 +342,9 @@ deploy.sh down
 ```
 
 ### Advanced
-#### Sandbox Mode
+#### Execution Model
 
-DeerFlow supports multiple sandbox execution modes:
-- **Local Execution** (runs sandbox code directly on the host machine)
-- **Docker Execution** (runs sandbox code in isolated Docker containers)
-- **Docker Execution with Kubernetes** (runs sandbox code in Kubernetes pods via provisioner service)
-
-For Docker development, service startup follows `config.yaml` sandbox mode. In Local/Docker modes, `provisioner` is not started.
-
-See the [Sandbox Configuration Guide](backend/docs/CONFIGURATION.md#sandbox) to configure your preferred mode.
+DeerFlow runs tools (bash, file I/O, search) directly on the host process. The harness no longer ships sandbox isolation; for production deployments, run DeerFlow itself inside a container or VM.
 
 #### MCP Server
 
@@ -585,15 +578,15 @@ Tools follow the same philosophy. DeerFlow comes with a core toolset — web sea
 Gateway-generated follow-up suggestions now normalize both plain-string model output and block/list-style rich content before parsing the JSON array response, so provider-specific content wrappers do not silently drop suggestions.
 
 ```
-# Paths inside the sandbox container
-/mnt/skills/public
+# Skills layout on the host
+skills/public/
 ├── research/SKILL.md
 ├── report-generation/SKILL.md
 ├── slide-creation/SKILL.md
 ├── web-page/SKILL.md
 └── image-generation/SKILL.md
 
-/mnt/skills/custom
+skills/custom/
 └── your-custom-skill/SKILL.md      ← yours
 ```
 
@@ -638,15 +631,15 @@ This is how DeerFlow handles tasks that take minutes to hours: a research task m
 
 DeerFlow doesn't just *talk* about doing things. It has its own computer.
 
-Each task gets its own execution environment with a full filesystem view — skills, workspace, uploads, outputs. The agent reads, writes, and edits files. It can view images and, when configured safely, execute shell commands.
+Each task gets its own per-thread workspace on the host — skills, workspace, uploads, outputs. The agent reads, writes, and edits files. It can view images and execute shell commands.
 
-With `AioSandboxProvider`, shell execution runs inside isolated containers. With `LocalSandboxProvider`, file tools still map to per-thread directories on the host, but host `bash` is disabled by default because it is not a secure isolation boundary. Re-enable host bash only for fully trusted local workflows.
+DeerFlow runs tools directly on the host. The harness no longer ships sandbox isolation; for production deployments, run DeerFlow itself inside a container or VM.
 
 This is the difference between a chatbot with tool access and an agent with an actual execution environment.
 
 ```
-# Paths inside the sandbox container
-/mnt/user-data/
+# Per-thread workspace layout on the host
+<thread workspace>/
 ├── uploads/          ← your files
 ├── workspace/        ← agents' working directory
 └── outputs/          ← final deliverables
@@ -732,7 +725,7 @@ DeerFlow has key high-privilege capabilities including **system command executio
 
 We welcome contributions! Please see [CONTRIBUTING.md](CONTRIBUTING.md) for development setup, workflow, and guidelines.
 
-Regression coverage includes Docker sandbox mode detection and provisioner kubeconfig-path handling tests in `backend/tests/`.
+Regression coverage includes provisioner kubeconfig-path handling tests in `backend/tests/`.
 Gateway artifact serving now forces active web content types (`text/html`, `application/xhtml+xml`, `image/svg+xml`) to download as attachments instead of inline rendering, reducing XSS risk for generated artifacts.
 
 ## License

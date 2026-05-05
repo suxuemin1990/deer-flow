@@ -475,8 +475,9 @@ tools:
     use: deerflow.sandbox.tools:str_replace_tool
 
   # Bash execution tool
-  # Active only when using an isolated shell sandbox or when
-  # sandbox.allow_host_bash: true explicitly opts into host bash.
+  # Runs commands directly on the host. The harness no longer ships sandbox
+  # isolation; for production deployments, run DeerFlow itself inside a
+  # container or VM.
   - name: bash
     group: bash
     use: deerflow.sandbox.tools:bash_tool
@@ -615,11 +616,6 @@ skills:
   # Default: ../skills (relative to backend directory)
   # Uncomment to customize:
   # path: /absolute/path/to/custom/skills
-
-  # Path where skills are mounted in the sandbox container
-  # This is used by the agent to access skills in both local and Docker sandbox
-  # Default: /mnt/skills
-  container_path: /mnt/skills
 
 # Note: To restrict which skills are loaded for a specific custom agent,
 # define a `skills` list in that agent's `config.yaml` (e.g. `agents/my-agent/config.yaml`):

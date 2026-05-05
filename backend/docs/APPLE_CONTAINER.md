@@ -1,5 +1,7 @@
 # Apple Container Support
 
+> **⚠️ Obsolete:** DeerFlow no longer ships sandbox isolation. The Apple Container / Docker runtime auto-detection described below applied to the now-removed `AioSandboxProvider`. This document is retained only for historical reference. For production deployments, run DeerFlow itself inside a container or VM.
+
 DeerFlow now supports Apple Container as the preferred container runtime on macOS, with automatic fallback to Docker.
 
 ## Overview

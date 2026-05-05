@@ -106,12 +106,11 @@ The web conversation delete flow is now split across both backend surfaces: Lang
 │  ┌──────────────────────────────────────────────────────────────────┐   │
 │  │ 1. ThreadDataMiddleware  - Initialize workspace/uploads/outputs  │   │
 │  │ 2. UploadsMiddleware     - Process uploaded files               │   │
-│  │ 3. SandboxMiddleware     - Acquire sandbox environment          │   │
-│  │ 4. SummarizationMiddleware - Context reduction (if enabled)     │   │
-│  │ 5. TitleMiddleware       - Auto-generate titles                 │   │
-│  │ 6. TodoListMiddleware    - Task tracking (if plan_mode)         │   │
-│  │ 7. ViewImageMiddleware   - Vision model support                 │   │
-│  │ 8. ClarificationMiddleware - Handle clarifications              │   │
+│  │ 3. SummarizationMiddleware - Context reduction (if enabled)     │   │
+│  │ 4. TitleMiddleware       - Auto-generate titles                 │   │
+│  │ 5. TodoListMiddleware    - Task tracking (if plan_mode)         │   │
+│  │ 6. ViewImageMiddleware   - Vision model support                 │   │
+│  │ 7. ClarificationMiddleware - Handle clarifications              │   │
 │  └──────────────────────────────────────────────────────────────────┘   │
 └────────────────────────────────────┬────────────────────────────────────┘
                                      │
@@ -146,47 +145,32 @@ class ThreadState(AgentState):
 
 ### Sandbox System
 
+The `Sandbox` abstract class survives as a thin tools-facing façade exposing `execute_command()`, `read_file()`, `write_file()`, `list_dir()`, etc. Below it, only `LocalSandbox` exists — it runs operations directly via host syscalls. Tools receive real host paths (no virtual `/mnt/...` translation).
+
 ```
 ┌─────────────────────────────────────────────────────────────────────────┐
 │                           Sandbox Architecture                           │
 └─────────────────────────────────────────────────────────────────────────┘
 
                       ┌─────────────────────────┐
-                      │    SandboxProvider      │ (Abstract)
-                      │  - acquire()            │
-                      │  - get()                │
-                      │  - release()            │
-                      └────────────┬────────────┘
-                                   │
-              ┌────────────────────┼────────────────────┐
-              │                                         │
-              ▼                                         ▼
-┌─────────────────────────┐              ┌─────────────────────────┐
-│  LocalSandboxProvider   │              │  AioSandboxProvider     │
-│  (packages/harness/deerflow/sandbox/local.py) │              │  (packages/harness/deerflow/community/)       │
-│                         │              │                         │
-│  - Singleton instance   │              │  - Docker-based         │
-│  - Direct execution     │              │  - Isolated containers  │
-│  - Development use      │              │  - Production use       │
-└─────────────────────────┘              └─────────────────────────┘
-
-                      ┌─────────────────────────┐
-                      │        Sandbox          │ (Abstract)
+                      │        Sandbox          │ (abstract façade)
                       │  - execute_command()    │
                       │  - read_file()          │
                       │  - write_file()         │
                       │  - list_dir()           │
+                      └────────────┬────────────┘
+                                   │
+                                   ▼
+                      ┌─────────────────────────┐
+                      │     LocalSandbox        │ (host syscalls)
                       └─────────────────────────┘
 ```
 
-**Virtual Path Mapping**:
+DeerFlow no longer ships sandbox isolation. For production deployments, run DeerFlow itself inside a container or VM.
 
-| Virtual Path | Physical Path |
-|-------------|---------------|
-| `/mnt/user-data/workspace` | `backend/.deer-flow/threads/{thread_id}/user-data/workspace` |
-| `/mnt/user-data/uploads` | `backend/.deer-flow/threads/{thread_id}/user-data/uploads` |
-| `/mnt/user-data/outputs` | `backend/.deer-flow/threads/{thread_id}/user-data/outputs` |
-| `/mnt/skills` | `deer-flow/skills/` |
+**Path Layout**:
+
+Files live on the host filesystem under `backend/.deer-flow/threads/{thread_id}/user-data/{workspace,uploads,outputs}/`. Skill files live under the configured `skills.path` (default `deer-flow/skills/`). Tools receive real host paths directly; there is no virtual-path translation.
 
 ### Tool System
 
@@ -361,7 +345,6 @@ SKILL.md Format:
    b. Execute middleware chain:
       - ThreadDataMiddleware: Set up paths
       - UploadsMiddleware: Inject file list
-      - SandboxMiddleware: Acquire sandbox
       - SummarizationMiddleware: Check token limits
       - TitleMiddleware: Generate title if needed
       - TodoListMiddleware: Load todos (if plan mode)
@@ -371,7 +354,7 @@ SKILL.md Format:
    c. Execute agent:
       - Model processes messages
       - May call tools (bash, web_search, etc.)
-      - Tools execute via sandbox
+      - Tools execute directly on the host
       - Results added to messages
 
    d. Stream response via SSE
@@ -398,15 +381,14 @@ SKILL.md Format:
      "files": [{
        "filename": "doc.pdf",
        "path": ".deer-flow/.../uploads/doc.pdf",
-       "virtual_path": "/mnt/user-data/uploads/doc.pdf",
-       "artifact_url": "/api/threads/.../artifacts/mnt/.../doc.pdf"
+       "artifact_url": "/api/threads/.../artifacts/uploads/doc.pdf"
      }]
    }
 
 4. Next agent run
    - UploadsMiddleware lists files
    - Injects file list into messages
-   - Agent can access via virtual_path
+   - Agent can access via real host path
 ```
 
 ### Thread Cleanup Flow
@@ -446,9 +428,8 @@ SKILL.md Format:
 
 ### Sandbox Isolation
 
-- Agent code executes within sandbox boundaries
-- Local sandbox: Direct execution (development only)
-- Docker sandbox: Container isolation (production recommended)
+- DeerFlow runs tools directly on the host process; the harness no longer ships sandbox isolation.
+- For production deployments, run DeerFlow itself inside a container or VM and rely on that boundary.
 - Path traversal prevention in file operations
 
 ### API Security

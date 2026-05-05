@@ -135,7 +135,7 @@ keep:
 #### `preserve_recent_skill_count`
 - **Type**: Integer (≥ 0)
 - **Default**: `5`
-- **Description**: Number of most-recently-loaded skill files (tool results whose tool name is in `skill_file_read_tool_names` and whose target path is under `skills.container_path`, e.g. `/mnt/skills/...`) that are rescued from summarization. Prevents the agent from losing skill instructions after compression. Set to `0` to disable skill rescue entirely.
+- **Description**: Number of most-recently-loaded skill files (tool results whose tool name is in `skill_file_read_tool_names` and whose target path is under the configured `skills.path`) that are rescued from summarization. Prevents the agent from losing skill instructions after compression. Set to `0` to disable skill rescue entirely.
 
 #### `preserve_recent_skill_tokens`
 - **Type**: Integer (≥ 0)
@@ -306,9 +306,8 @@ The middleware intelligently preserves message context:
 Summarization runs after ThreadData and Sandbox initialization but before Title and Clarification:
 
 1. ThreadDataMiddleware
-2. SandboxMiddleware
-3. **SummarizationMiddleware** ← Runs here
-4. TitleMiddleware
+2. **SummarizationMiddleware** ← Runs here
+3. TitleMiddleware
 5. ClarificationMiddleware
 
 ### State Management

@@ -145,7 +145,7 @@ Backend core:
 
 - `backend/packages/harness/deerflow/agents/` - lead agent, middleware chain, memory
 - `backend/app/gateway/` - FastAPI gateway API
-- `backend/packages/harness/deerflow/sandbox/` - sandbox provider + tool wrappers
+- `backend/packages/harness/deerflow/sandbox/` - host filesystem façade + tool wrappers (no isolation; tools run directly on the host)
 - `backend/packages/harness/deerflow/subagents/` - subagent registry/execution
 - `backend/packages/harness/deerflow/mcp/` - MCP integration
 - `backend/langgraph.json` - graph entrypoint (`deerflow.agents:make_lead_agent`)

@@ -55,7 +55,7 @@ DeerFlowは、BytePlusが独自に開発したインテリジェント検索・�
       - [オプション1: Docker（推奨）](#オプション1-docker推奨)
       - [オプション2: ローカル開発](#オプション2-ローカル開発)
     - [詳細設定](#詳細設定)
-      - [サンドボックスモード](#サンドボックスモード)
+      - [実行モデル](#実行モデル)
       - [MCPサーバー](#mcpサーバー)
       - [IMチャネル](#imチャネル)
       - [LangSmithトレーシング](#langsmithトレーシング)
@@ -171,7 +171,7 @@ make docker-init    # サンドボックスイメージをプル（初回また�
 make docker-start   # サービスを開始（config.yamlからサンドボックスモードを自動検出）
 ```
 
-`make docker-start`は、`config.yaml`がプロビジョナーモード（`sandbox.use: deerflow.community.aio_sandbox:AioSandboxProvider`と`provisioner_url`）を使用している場合にのみ`provisioner`を起動します。
+`make docker-start`は、`config.yaml`に`provisioner_url`が設定されている場合にのみ`provisioner`を起動します。DeerFlowはツールをホスト上で直接実行します。本番デプロイでは、ハーネス自体をコンテナやVM内で実行してください。
 
 **本番環境**（ローカルでイメージをビルドし、ランタイム設定とデータをマウント）：
 
@@ -217,16 +217,9 @@ make down   # コンテナを停止して削除
 5. **アクセス**: http://localhost:2026
 
 ### 詳細設定
-#### サンドボックスモード
+#### 実行モデル
 
-DeerFlowは複数のサンドボックス実行モードをサポートしています：
-- **ローカル実行**（ホストマシン上で直接サンドボックスコードを実行）
-- **Docker実行**（分離されたDockerコンテナ内でサンドボックスコードを実行）
-- **KubernetesによるDocker実行**（プロビジョナーサービス経由でKubernetesポッドでサンドボックスコードを実行）
-
-Docker開発では、サービスの起動は`config.yaml`のサンドボックスモードに従います。ローカル/Dockerモードでは`provisioner`は起動されません。
-
-お好みのモードの設定については[サンドボックス設定ガイド](backend/docs/CONFIGURATION.md#sandbox)をご覧ください。
+DeerFlowはツール（bash、ファイルI/O、検索）をホストプロセス上で直接実行します。ハーネスはサンドボックス分離を提供しません。本番デプロイでは、DeerFlow自体をコンテナやVM内で実行してください。
 
 #### MCPサーバー
 
@@ -389,15 +382,15 @@ Gateway経由で`.skill`アーカイブをインストールする際、DeerFlow
 Gatewayが生成するフォローアップ提案は、プレーン文字列のモデル出力とブロック/リスト形式のリッチコンテンツの両方をJSON配列レスポンスの解析前に正規化するため、プロバイダー固有のコンテンツラッパーが提案をサイレントにドロップすることはありません。
 
 ```
-# サンドボックスコンテナ内のパス
-/mnt/skills/public
+# Skills layout on the host
+skills/public/
 ├── research/SKILL.md
 ├── report-generation/SKILL.md
 ├── slide-creation/SKILL.md
 ├── web-page/SKILL.md
 └── image-generation/SKILL.md
 
-/mnt/skills/custom
+skills/custom/
 └── your-custom-skill/SKILL.md      ← あなたのカスタムスキル
 ```
 
@@ -442,13 +435,15 @@ DEERFLOW_LANGGRAPH_URL=http://localhost:2026/api/langgraph  # LangGraph API
 
 DeerFlowは物事を*語る*だけではありません。自分のコンピューターを持っています。
 
-各タスクは、完全なファイルシステムを持つ分離されたDockerコンテナ内で実行されます——スキル、ワークスペース、アップロード、出力。エージェントはファイルの読み書き・編集を行います。bashコマンドを実行し、コーディングを行います。画像を表示します。すべてサンドボックス化され、すべて監査可能で、セッション間の汚染はゼロです。
+各タスクは、ホスト上のスレッドごとのワークスペースで実行されます——skills、workspace、uploads、outputsを含むファイルシステム。エージェントはファイルの読み書き・編集を行います。bashコマンドを実行し、コーディングを行います。画像を表示します。
+
+DeerFlowはツールをホスト上で直接実行します。ハーネスはサンドボックス分離を提供しません。本番デプロイでは、DeerFlow自体をコンテナやVM内で実行してください。
 
 これが、ツールアクセスのあるチャットボットと、実際の実行環境を持つエージェントの違いです。
 
 ```
-# サンドボックスコンテナ内のパス
-/mnt/user-data/
+# Per-thread workspace layout on the host
+<thread workspace>/
 ├── uploads/          ← あなたのファイル
 ├── workspace/        ← エージェントの作業ディレクトリ
 └── outputs/          ← 最終成果物
@@ -532,7 +527,7 @@ DeerFlowは**システムコマンドの実行、リソース操作、ビジネ�
 
 コントリビューションを歓迎します！開発環境のセットアップ、ワークフロー、ガイドラインについては[CONTRIBUTING.md](CONTRIBUTING.md)をご覧ください。
 
-回帰テストのカバレッジには、`backend/tests/`でのDockerサンドボックスモード検出とプロビジョナーkubeconfig-pathハンドリングテストが含まれます。
+回帰テストのカバレッジには、`backend/tests/`でのプロビジョナーkubeconfig-pathハンドリングテストが含まれます。
 
 ## ライセンス
 

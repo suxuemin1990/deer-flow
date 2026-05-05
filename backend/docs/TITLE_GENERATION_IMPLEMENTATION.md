@@ -26,7 +26,7 @@
 
 #### [`packages/harness/deerflow/agents/lead_agent/agent.py`](../packages/harness/deerflow/agents/lead_agent/agent.py)
 - ✅ 导入 `TitleMiddleware`
-- ✅ 注册到 `middleware` 列表：`[SandboxMiddleware(), TitleMiddleware()]`
+- ✅ 注册到 `middleware` 列表：`[ThreadDataMiddleware(), TitleMiddleware()]`
 
 ### 2. 配置文件
 

@@ -113,10 +113,10 @@ def glob_tool(
 建议返回格式：
 
 ```text
-Found 3 paths under /mnt/user-data/workspace
-1. /mnt/user-data/workspace/backend/app.py
-2. /mnt/user-data/workspace/backend/tests/test_app.py
-3. /mnt/user-data/workspace/scripts/build.py
+Found 3 paths under <workspace>
+1. <workspace>/backend/app.py
+2. <workspace>/backend/tests/test_app.py
+3. <workspace>/scripts/build.py
 ```
 
 如果后续想更适合前端消费，也可以改成 JSON 字符串；但第一版为了兼容现有工具风格，返回可读文本即可。

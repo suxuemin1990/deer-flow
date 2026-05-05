@@ -1,6 +1,6 @@
 # Guardrails: Pre-Tool-Call Authorization
 
-> **Context:** [Issue #1213](https://github.com/bytedance/deer-flow/issues/1213) — DeerFlow has Docker sandboxing and human approval via `ask_clarification`, but no deterministic, policy-driven authorization layer for tool calls. An agent running autonomous multi-step tasks can execute any loaded tool with any arguments. Guardrails add a middleware that evaluates every tool call against a policy **before** execution.
+> **Context:** [Issue #1213](https://github.com/bytedance/deer-flow/issues/1213) — DeerFlow has human approval via `ask_clarification`, but no deterministic, policy-driven authorization layer for tool calls. An agent running autonomous multi-step tasks can execute any loaded tool with any arguments. Guardrails add a middleware that evaluates every tool call against a policy **before** execution.
 
 ## Why Guardrails
 
@@ -43,11 +43,10 @@ Without guardrails:                      With guardrails:
 │                                                                      │
 │  1. ThreadDataMiddleware     ─── per-thread dirs                     │
 │  2. UploadsMiddleware        ─── file upload tracking                │
-│  3. SandboxMiddleware        ─── sandbox acquisition                 │
-│  4. DanglingToolCallMiddleware ── fix incomplete tool calls           │
-│  5. GuardrailMiddleware ◄──── EVALUATES EVERY TOOL CALL             │
-│  6. ToolErrorHandlingMiddleware ── convert exceptions to messages     │
-│  7-12. (Summarization, Title, Memory, Vision, Subagent, Clarify)    │
+│  3. DanglingToolCallMiddleware ── fix incomplete tool calls           │
+│  4. GuardrailMiddleware ◄──── EVALUATES EVERY TOOL CALL             │
+│  5. ToolErrorHandlingMiddleware ── convert exceptions to messages     │
+│  6-11. (Summarization, Title, Memory, Vision, Subagent, Clarify)     │
 │                                                                      │
 └─────────────────────────────────────────────────────────────────────┘
                          │
@@ -318,7 +317,7 @@ Standard codes used by the [OAP specification](https://github.com/aporthq/aport-
 
 ### Provider Loading
 
-DeerFlow loads providers via `resolve_variable()` -- the same mechanism used for models, tools, and sandbox providers. The `use:` field is a Python class path: `package.module:ClassName`.
+DeerFlow loads providers via `resolve_variable()` -- the same mechanism used for models and tools. The `use:` field is a Python class path: `package.module:ClassName`.
 
 The provider is instantiated with `**config` kwargs if `config:` is set, plus `framework="deerflow"` is always injected. Accept `**kwargs` to stay forward-compatible:
 

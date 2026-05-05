@@ -49,14 +49,9 @@ The backend searches for `config.yaml` in this order:
 
 **Recommended**: Place `config.yaml` in project root (`deer-flow/config.yaml`).
 
-## Sandbox Setup (Optional but Recommended)
+## Sandbox Setup (Optional)
 
-If you plan to use Docker/Container-based sandbox (configured in `config.yaml` under `sandbox.use: deerflow.community.aio_sandbox:AioSandboxProvider`), it's highly recommended to pre-pull the container image:
-
-```bash
-# From project root
-make setup-sandbox
-```
+DeerFlow runs tools directly on the host. The harness no longer ships sandbox isolation; for production deployments, run DeerFlow itself inside a container or VM. The legacy `make setup-sandbox` target is retained for users who still pre-pull the historical container image, but it is no longer required.
 
 **Why pre-pull?**
 - The sandbox image (~500MB+) is pulled on first use, causing a long wait

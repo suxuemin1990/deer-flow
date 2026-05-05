@@ -202,62 +202,27 @@ tools:
 
 ### Sandbox
 
-DeerFlow supports multiple sandbox execution modes. Configure your preferred mode in `config.yaml`:
-
-**Local Execution** (runs sandbox code directly on the host machine):
-```yaml
-sandbox:
-   use: deerflow.sandbox.local:LocalSandboxProvider # Local execution
-   allow_host_bash: false # default; host bash is disabled unless explicitly re-enabled
-```
-
-**Docker Execution** (runs sandbox code in isolated Docker containers):
-```yaml
-sandbox:
-   use: deerflow.community.aio_sandbox:AioSandboxProvider # Docker-based sandbox
-```
-
-**Docker Execution with Kubernetes** (runs sandbox code in Kubernetes pods via provisioner service):
-
-This mode runs each sandbox in an isolated Kubernetes Pod on your **host machine's cluster**. Requires Docker Desktop K8s, OrbStack, or similar local K8s setup.
+DeerFlow runs tools (bash, file I/O, search) directly on the host process. The harness no longer ships sandbox isolation; for production deployments, run DeerFlow itself inside a container or VM.
 
 ```yaml
 sandbox:
-   use: deerflow.community.aio_sandbox:AioSandboxProvider
-   provisioner_url: http://provisioner:8002
+  bash_output_max_chars: 50000
+  read_file_output_max_chars: 50000
+  ls_output_max_chars: 50000
 ```
 
-When using Docker development (`make docker-start`), DeerFlow starts the `provisioner` service only if this provisioner mode is configured. In local or plain Docker sandbox modes, `provisioner` is skipped.
+Legacy fields such as `sandbox.use`, `sandbox.allow_host_bash`, `sandbox.image`, `sandbox.port`, `sandbox.replicas`, `sandbox.mounts`, `sandbox.environment`, `sandbox.idle_timeout`, and `sandbox.container_prefix` are silently ignored; a one-time deprecation warning is logged on startup if `sandbox.use` is present.
+
+#### Provisioner mode (Kubernetes-backed remote runtime)
+
+If you configure `sandbox.provisioner_url`, `make docker-start` additionally launches the `provisioner` service. This is unrelated to per-tool isolation — it is an optional remote runtime endpoint.
+
+```yaml
+sandbox:
+  provisioner_url: http://provisioner:8002
+```
 
 See [Provisioner Setup Guide](../../docker/provisioner/README.md) for detailed configuration, prerequisites, and troubleshooting.
-
-Choose between local execution or Docker-based isolation:
-
-**Option 1: Local Sandbox** (default, simpler setup):
-```yaml
-sandbox:
-  use: deerflow.sandbox.local:LocalSandboxProvider
-  allow_host_bash: false
-```
-
-`allow_host_bash` is intentionally `false` by default. DeerFlow's local sandbox is a host-side convenience mode, not a secure shell isolation boundary. If you need `bash`, prefer `AioSandboxProvider`. Only set `allow_host_bash: true` for fully trusted single-user local workflows.
-
-**Option 2: Docker Sandbox** (isolated, more secure):
-```yaml
-sandbox:
-  use: deerflow.community.aio_sandbox:AioSandboxProvider
-  port: 8080
-  auto_start: true
-  container_prefix: deer-flow-sandbox
-
-  # Optional: Additional mounts
-  mounts:
-    - host_path: /path/on/host
-      container_path: /path/in/container
-      read_only: false
-```
-
-When you configure `sandbox.mounts`, DeerFlow exposes those `container_path` values in the agent prompt so the agent can discover and operate on mounted directories directly instead of assuming everything must live under `/mnt/user-data`.
 
 ### Skills
 
@@ -267,16 +232,13 @@ Configure the skills directory for specialized workflows:
 skills:
   # Host path (optional, default: ../skills)
   path: /custom/path/to/skills
-
-  # Container mount path (default: /mnt/skills)
-  container_path: /mnt/skills
 ```
 
 **How Skills Work**:
 - Skills are stored in `deer-flow/skills/{public,custom}/`
 - Each skill has a `SKILL.md` file with metadata
 - Skills are automatically discovered and loaded
-- Available in both local and Docker sandbox via path mapping
+- Skill files are read directly from the host filesystem
 
 **Per-Agent Skill Filtering**:
 Custom agents can restrict which skills they load by defining a `skills` field in their `config.yaml` (located at `workspace/agents/<agent_name>/config.yaml`):
@@ -341,7 +303,7 @@ DeerFlow searches for configuration in this order:
 3. **Use environment variables for secrets** - Don't hardcode API keys
 4. **Keep `config.example.yaml` updated** - Document all new options
 5. **Test configuration changes locally** - Before deploying
-6. **Use Docker sandbox for production** - Better isolation and security
+6. **Run DeerFlow inside a container or VM in production** - The harness no longer ships sandbox isolation; isolate at the deployment boundary
 
 ## Troubleshooting
 
@@ -360,9 +322,7 @@ DeerFlow searches for configuration in this order:
 - Check `skills.path` configuration if using custom path
 
 ### "Docker sandbox fails to start"
-- Ensure Docker is running
-- Check port 8080 (or configured port) is available
-- Verify Docker image is accessible
+- Sandbox isolation has been removed; this section no longer applies. If you previously relied on the Docker-backed sandbox, run DeerFlow itself inside a container or VM and configure `sandbox.provisioner_url` only if you need the Kubernetes-backed remote runtime.
 
 ## Examples
 
