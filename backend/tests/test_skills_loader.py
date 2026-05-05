@@ -19,8 +19,8 @@ def test_get_skills_root_path_points_to_project_root_skills():
     assert (path.parent / "backend").is_dir(), f"Expected skills path's parent to be project root containing 'backend/', but got {path}"
 
 
-def test_load_skills_discovers_nested_skills_and_sets_container_paths(tmp_path: Path):
-    """Nested skills should be discovered recursively with correct container paths."""
+def test_load_skills_discovers_nested_skills(tmp_path: Path):
+    """Nested skills should be discovered recursively with correct relative paths."""
     skills_root = tmp_path / "skills"
 
     _write_skill(skills_root / "public" / "root-skill", "root-skill", "Root skill")
@@ -37,13 +37,13 @@ def test_load_skills_discovers_nested_skills_and_sets_container_paths(tmp_path: 
     team_skill = by_name["team-helper"]
 
     assert root_skill.skill_path == "root-skill"
-    assert root_skill.get_container_file_path() == "/mnt/skills/public/root-skill/SKILL.md"
+    assert root_skill.category == "public"
 
     assert child_skill.skill_path == "parent/child-skill"
-    assert child_skill.get_container_file_path() == "/mnt/skills/public/parent/child-skill/SKILL.md"
+    assert child_skill.category == "public"
 
     assert team_skill.skill_path == "team/helper"
-    assert team_skill.get_container_file_path() == "/mnt/skills/custom/team/helper/SKILL.md"
+    assert team_skill.category == "custom"
 
 
 def test_load_skills_skips_hidden_directories(tmp_path: Path):

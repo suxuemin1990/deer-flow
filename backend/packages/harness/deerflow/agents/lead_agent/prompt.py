@@ -636,7 +636,12 @@ def get_skills_prompt_section(available_skills: set[str] | None = None, skills_p
     if available_skills is not None and not any(skill.name in available_skills for skill in skills):
         return ""
 
-    skill_signature = tuple((skill.name, skill.description, skill.category, skill.get_container_file_path(skills_base_path)) for skill in skills)
+    def _skill_file_path(skill: "Skill") -> str:
+        skill_path = skill.skill_path
+        category_base = f"{skills_base_path}/{skill.category}"
+        return f"{category_base}/{skill_path}/SKILL.md" if skill_path else f"{category_base}/SKILL.md"
+
+    skill_signature = tuple((skill.name, skill.description, skill.category, _skill_file_path(skill)) for skill in skills)
     available_key = tuple(sorted(available_skills)) if available_skills is not None else None
     if not skill_signature and available_key is not None:
         return ""

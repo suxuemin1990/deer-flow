@@ -36,23 +36,8 @@ _MAX_GREP_MAX_RESULTS = 500
 
 
 def _get_skills_container_path() -> str:
-    """Get the skills container path from config, with fallback to default.
-
-    Result is cached after the first successful config load.  If config loading
-    fails the default is returned *without* caching so that a later call can
-    pick up the real value once the config is available.
-    """
-    cached = getattr(_get_skills_container_path, "_cached", None)
-    if cached is not None:
-        return cached
-    try:
-        from deerflow.config import get_app_config
-
-        value = get_app_config().skills.container_path
-        _get_skills_container_path._cached = value  # type: ignore[attr-defined]
-        return value
-    except Exception:
-        return _DEFAULT_SKILLS_CONTAINER_PATH
+    """Return the canonical virtual prefix for skills paths (always the default)."""
+    return _DEFAULT_SKILLS_CONTAINER_PATH
 
 
 def _get_skills_host_path() -> str | None:
