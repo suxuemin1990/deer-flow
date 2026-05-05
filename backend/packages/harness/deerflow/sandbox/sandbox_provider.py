@@ -84,6 +84,21 @@ def shutdown_sandbox_provider() -> None:
         _default_sandbox_provider = None
 
 
+def get_sandbox() -> Sandbox:
+    """Return the active Sandbox singleton.
+
+    Thin façade over the provider's ``acquire`` + ``get`` lifecycle. Use this
+    instead of ``get_sandbox_provider().get(...)`` when you just need a
+    Sandbox to do file I/O.
+    """
+    provider = get_sandbox_provider()
+    sandbox_id = provider.acquire()
+    sandbox = provider.get(sandbox_id)
+    if sandbox is None:
+        raise RuntimeError(f"sandbox provider returned None for id {sandbox_id!r}")
+    return sandbox
+
+
 def set_sandbox_provider(provider: SandboxProvider) -> None:
     """Set a custom sandbox provider instance.
 

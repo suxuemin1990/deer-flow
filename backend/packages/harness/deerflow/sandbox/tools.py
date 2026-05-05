@@ -16,7 +16,7 @@ from deerflow.sandbox.exceptions import (
 )
 from deerflow.sandbox.file_operation_lock import get_file_operation_lock
 from deerflow.sandbox.sandbox import Sandbox
-from deerflow.sandbox.sandbox_provider import get_sandbox_provider
+from deerflow.sandbox.sandbox_provider import get_sandbox, get_sandbox_provider
 from deerflow.sandbox.search import GrepMatch
 
 _ABSOLUTE_PATH_PATTERN = re.compile(r"(?<![:\w])(?<!:/)/(?:[^\s\"'`;&|<>()]+)")
@@ -816,9 +816,7 @@ def sandbox_from_runtime(runtime: ToolRuntime[ContextT, ThreadState] | None = No
     sandbox_id = runtime.context.get("sandbox_id") if runtime.context else None
     if sandbox_id is None:
         raise SandboxRuntimeError("Sandbox ID not found in runtime context")
-    sandbox = get_sandbox_provider().get(sandbox_id)
-    if sandbox is None:
-        raise SandboxNotFoundError(f"Sandbox with ID '{sandbox_id}' not found", sandbox_id=sandbox_id)
+    sandbox = get_sandbox()
 
     if runtime.context is not None:
         runtime.context["sandbox_id"] = sandbox_id  # Ensure sandbox_id is in context for downstream use
@@ -852,10 +850,7 @@ def ensure_sandbox_initialized(runtime: ToolRuntime[ContextT, ThreadState] | Non
     # Check if sandbox already exists in runtime context
     sandbox_id = runtime.context.get("sandbox_id") if runtime.context else None
     if sandbox_id is not None:
-        sandbox = get_sandbox_provider().get(sandbox_id)
-        if sandbox is not None:
-            return sandbox
-        # Sandbox was released, fall through to acquire new one
+        return get_sandbox()
 
     # Lazy acquisition: get thread_id and acquire sandbox
     thread_id = runtime.context.get("thread_id") if runtime.context else None
