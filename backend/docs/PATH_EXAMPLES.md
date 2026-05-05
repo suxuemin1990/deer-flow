@@ -26,34 +26,35 @@ content = file_path.read_bytes()
 ### 2. 虚拟路径 (virtual_path)
 
 ```
-/mnt/user-data/uploads/document.pdf
+uploads/document.pdf
 ```
 
 **用途：**
-- Agent 在沙箱环境中使用的路径
-- 沙箱系统会自动映射到实际路径
-- Agent 的所有文件操作工具都使用这个路径
+- Agent 工具调用时使用的相对路径（相对于线程 user-data 目录）
+- 工具会自动解析为 `<base_dir>/threads/<thread_id>/user-data/...`，Agent 无需关心实际存储位置
+- 上一版本返回的 `/mnt/user-data/...` 形式仍然被工具接受（向后兼容）
 
 **示例：**
 Agent 在对话中使用：
 ```python
 # Agent 使用 read_file 工具
-read_file(path="/mnt/user-data/uploads/document.pdf")
+read_file(path="uploads/document.pdf")
 
 # Agent 使用 bash 工具
-bash(command="cat /mnt/user-data/uploads/document.pdf")
+bash(command="cat uploads/document.pdf")
 ```
 
 ### 3. HTTP 访问 URL (artifact_url)
 
 ```
-/api/threads/{thread_id}/artifacts/mnt/user-data/uploads/document.pdf
+/api/threads/{thread_id}/artifacts/uploads/document.pdf
 ```
 
 **用途：**
 - 前端通过 HTTP 访问文件
 - 用于下载、预览文件
 - 可以直接在浏览器中打开
+- 旧版 `/api/threads/{thread_id}/artifacts/mnt/user-data/...` 形式仍然被接受（向后兼容）
 
 **示例：**
 ```typescript
@@ -62,11 +63,11 @@ const threadId = 'abc123';
 const filename = 'document.pdf';
 
 // 下载文件
-const downloadUrl = `/api/threads/${threadId}/artifacts/mnt/user-data/uploads/${filename}?download=true`;
+const downloadUrl = `/api/threads/${threadId}/artifacts/uploads/${filename}?download=true`;
 window.open(downloadUrl);
 
 // 在新窗口预览
-const viewUrl = `/api/threads/${threadId}/artifacts/mnt/user-data/uploads/${filename}`;
+const viewUrl = `/api/threads/${threadId}/artifacts/uploads/${filename}`;
 window.open(viewUrl, '_blank');
 
 // 使用 fetch API 获取
@@ -100,20 +101,20 @@ async function uploadAndProcess(threadId: string, file: File) {
   // {
   //   filename: "report.pdf",
   //   path: ".deer-flow/threads/abc123/user-data/uploads/report.pdf",
-  //   virtual_path: "/mnt/user-data/uploads/report.pdf",
-  //   artifact_url: "/api/threads/abc123/artifacts/mnt/user-data/uploads/report.pdf",
+  //   virtual_path: "uploads/report.pdf",
+  //   artifact_url: "/api/threads/abc123/artifacts/uploads/report.pdf",
   //   markdown_file: "report.md",
   //   markdown_path: ".deer-flow/threads/abc123/user-data/uploads/report.md",
-  //   markdown_virtual_path: "/mnt/user-data/uploads/report.md",
-  //   markdown_artifact_url: "/api/threads/abc123/artifacts/mnt/user-data/uploads/report.md"
+  //   markdown_virtual_path: "uploads/report.md",
+  //   markdown_artifact_url: "/api/threads/abc123/artifacts/uploads/report.md"
   // }
 
   // 2. 发送消息给 Agent
   await sendMessage(threadId, "请分析刚上传的 PDF 文件");
 
   // Agent 会自动看到文件列表，包含：
-  // - report.pdf (虚拟路径: /mnt/user-data/uploads/report.pdf)
-  // - report.md (虚拟路径: /mnt/user-data/uploads/report.md)
+  // - report.pdf (路径: uploads/report.pdf)
+  // - report.md (路径: uploads/report.md)
 
   // 3. 前端可以直接访问转换后的 Markdown
   const mdResponse = await fetch(fileInfo.markdown_artifact_url);
@@ -133,8 +134,8 @@ async function uploadAndProcess(threadId: string, file: File) {
 | 场景 | 使用的路径类型 | 示例 |
 |------|---------------|------|
 | 服务器后端代码直接访问 | `path` | `.deer-flow/threads/abc123/user-data/uploads/file.pdf` |
-| Agent 工具调用 | `virtual_path` | `/mnt/user-data/uploads/file.pdf` |
-| 前端下载/预览 | `artifact_url` | `/api/threads/abc123/artifacts/mnt/user-data/uploads/file.pdf` |
+| Agent 工具调用 | `virtual_path` | `uploads/file.pdf` |
+| 前端下载/预览 | `artifact_url` | `/api/threads/abc123/artifacts/uploads/file.pdf` |
 | 备份脚本 | `path` | `.deer-flow/threads/abc123/user-data/uploads/file.pdf` |
 | 日志记录 | `path` | `.deer-flow/threads/abc123/user-data/uploads/file.pdf` |
 
@@ -274,9 +275,9 @@ function FileUploadList({ threadId }: { threadId: string }) {
    - 前端不应直接使用 `path`，而应使用 `artifact_url`
 
 2. **Agent 使用**
-   - Agent 只能看到和使用 `virtual_path`
-   - 沙箱系统自动映射到实际路径
-   - Agent 不需要知道实际的文件系统结构
+   - Agent 使用 `virtual_path`（相对于线程 user-data 目录）
+   - DeerFlow 工具在宿主文件系统上运行，自动解析为线程目录下的实际路径
+   - 旧版 `/mnt/user-data/...` 形式仍然被工具和 artifact 路由接受（向后兼容）
 
 3. **前端集成**
    - 始终使用 `artifact_url` 访问文件

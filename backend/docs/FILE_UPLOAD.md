@@ -31,12 +31,12 @@ POST /api/threads/{thread_id}/uploads
       "filename": "document.pdf",
       "size": 1234567,
       "path": ".deer-flow/threads/{thread_id}/user-data/uploads/document.pdf",
-      "virtual_path": "/mnt/user-data/uploads/document.pdf",
-      "artifact_url": "/api/threads/{thread_id}/artifacts/mnt/user-data/uploads/document.pdf",
+      "virtual_path": "uploads/document.pdf",
+      "artifact_url": "/api/threads/{thread_id}/artifacts/uploads/document.pdf",
       "markdown_file": "document.md",
       "markdown_path": ".deer-flow/threads/{thread_id}/user-data/uploads/document.md",
-      "markdown_virtual_path": "/mnt/user-data/uploads/document.md",
-      "markdown_artifact_url": "/api/threads/{thread_id}/artifacts/mnt/user-data/uploads/document.md"
+      "markdown_virtual_path": "uploads/document.md",
+      "markdown_artifact_url": "/api/threads/{thread_id}/artifacts/uploads/document.md"
     }
   ],
   "message": "Successfully uploaded 1 file(s)"
@@ -45,8 +45,10 @@ POST /api/threads/{thread_id}/uploads
 
 **路径说明：**
 - `path`: 实际文件系统路径（相对于 `backend/` 目录）
-- `virtual_path`: Agent 在沙箱中使用的虚拟路径
+- `virtual_path`: Agent 工具调用时使用的相对路径（相对于线程 user-data 目录）
 - `artifact_url`: 前端通过 HTTP 访问文件的 URL
+
+> 旧版 `/mnt/user-data/...` 形式的虚拟路径与 artifact URL 仍受支持（Artifact 路由保留向后兼容解析）。
 
 ### 2. 列出已上传文件
 ```
@@ -61,8 +63,8 @@ GET /api/threads/{thread_id}/uploads/list
       "filename": "document.pdf",
       "size": 1234567,
       "path": ".deer-flow/threads/{thread_id}/user-data/uploads/document.pdf",
-      "virtual_path": "/mnt/user-data/uploads/document.pdf",
-      "artifact_url": "/api/threads/{thread_id}/artifacts/mnt/user-data/uploads/document.pdf",
+      "virtual_path": "uploads/document.pdf",
+      "artifact_url": "/api/threads/{thread_id}/artifacts/uploads/document.pdf",
       "extension": ".pdf",
       "modified": 1705997600.0
     }
@@ -107,10 +109,10 @@ Agent 在每次请求时会自动收到已上传文件的列表，格式如下�
 The following files have been uploaded and are available for use:
 
 - document.pdf (1.2 MB)
-  Path: /mnt/user-data/uploads/document.pdf
+  Path: uploads/document.pdf
 
 - document.md (45.3 KB)
-  Path: /mnt/user-data/uploads/document.md
+  Path: uploads/document.md
 
 You can read these files using the `read_file` tool with the paths shown above.
 </uploaded_files>
@@ -118,25 +120,24 @@ You can read these files using the `read_file` tool with the paths shown above.
 
 ### 使用上传的文件
 
-Agent 在沙箱中运行，使用虚拟路径访问文件。Agent 可以直接使用 `read_file` 工具读取上传的文件：
+Agent 直接在宿主文件系统上运行，使用相对于线程 user-data 目录的路径访问上传文件（工具会自动解析为 `<base_dir>/threads/<thread_id>/user-data/...`）。Agent 可以直接使用 `read_file` 工具读取上传的文件：
 
 ```python
 # 读取原始 PDF（如果支持）
-read_file(path="/mnt/user-data/uploads/document.pdf")
+read_file(path="uploads/document.pdf")
 
 # 读取转换后的 Markdown（推荐）
-read_file(path="/mnt/user-data/uploads/document.md")
+read_file(path="uploads/document.md")
 ```
 
 **路径映射关系：**
-- Agent 使用：`/mnt/user-data/uploads/document.pdf`（虚拟路径）
+- Agent 使用：`uploads/document.pdf`（相对于线程 user-data 目录）
 - 实际存储：`backend/.deer-flow/threads/{thread_id}/user-data/uploads/document.pdf`
-- 前端访问：`/api/threads/{thread_id}/artifacts/mnt/user-data/uploads/document.pdf`（HTTP URL）
+- 前端访问：`/api/threads/{thread_id}/artifacts/uploads/document.pdf`（HTTP URL）
 
-上传流程采用“线程目录优先”策略：
-- 先写入 `backend/.deer-flow/threads/{thread_id}/user-data/uploads/` 作为权威存储
-- 本地沙箱（`sandbox_id=local`）直接使用线程目录内容
-- 非本地沙箱会额外同步到 `/mnt/user-data/uploads/*`，确保运行时可见
+> 旧版 `/mnt/user-data/uploads/...` 形式的路径仍然被工具和 artifact 路由接受（向后兼容）。
+
+上传流程采用“线程目录作为权威存储”策略：文件写入 `backend/.deer-flow/threads/{thread_id}/user-data/uploads/`，Agent 工具直接读写该目录（不再需要沙箱同步）。
 
 ## 测试示例
 
@@ -252,7 +253,6 @@ backend/.deer-flow/threads/
 1. 确认 UploadsMiddleware 已在 agent.py 中注册
 2. 检查 thread_id 是否正确
 3. 确认文件确实已上传到 `backend/.deer-flow/threads/{thread_id}/user-data/uploads/`
-4. 非本地沙箱场景下，确认上传接口没有报错（需要成功完成 sandbox 同步）
 
 ## 开发建议
 
