@@ -13,20 +13,20 @@ def test_get_available_subagent_names_returns_all_builtins() -> None:
 def test_build_subagent_section_hides_bash_examples_when_unavailable(monkeypatch) -> None:
     monkeypatch.setattr(prompt_module, "get_available_subagent_names", lambda: ["general-purpose"])
 
-    section = prompt_module._build_subagent_section(3)
+    section = prompt_module._build_subagent_section(3, "/run/deerflow/threads/t1/user-data/workspace")
 
     # When bash is not available, it should not appear at all (aligned with Codex:
     # unavailable roles are omitted, not listed as disabled)
     assert "**bash**" not in section
     assert 'bash("npm test")' not in section
-    assert 'read_file("/mnt/user-data/workspace/README.md")' in section
+    assert 'read_file("/run/deerflow/threads/t1/user-data/workspace/README.md")' in section
     assert "available tools (ls, read_file, web_search, etc.)" in section
 
 
 def test_build_subagent_section_includes_bash_when_available(monkeypatch) -> None:
     monkeypatch.setattr(prompt_module, "get_available_subagent_names", lambda: ["general-purpose", "bash"])
 
-    section = prompt_module._build_subagent_section(3)
+    section = prompt_module._build_subagent_section(3, "/run/deerflow/threads/t1/user-data/workspace")
 
     assert "For command execution (git, build, test, deploy operations)" in section
     assert 'bash("npm test")' in section

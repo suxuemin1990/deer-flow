@@ -26,6 +26,19 @@ from deerflow.models import create_chat_model
 logger = logging.getLogger(__name__)
 
 
+def _resolve_skills_host_path() -> str | None:
+    """Resolve the host filesystem path to the skills directory.
+
+    Returns ``None`` on failure so the prompt falls back to a placeholder
+    string rather than crashing agent construction.
+    """
+    try:
+        return str(get_app_config().skills.get_skills_path())
+    except Exception:
+        logger.exception("Failed to resolve skills host path; prompt will use fallback")
+        return None
+
+
 def _get_runtime_config(config: RunnableConfig) -> dict:
     """Merge legacy configurable options with LangGraph runtime context."""
     cfg = dict(config.get("configurable", {}) or {})
@@ -370,7 +383,12 @@ def make_lead_agent(config: RunnableConfig):
             model=create_chat_model(name=model_name, thinking_enabled=thinking_enabled),
             tools=get_available_tools(model_name=model_name, subagent_enabled=subagent_enabled) + [setup_agent],
             middleware=_build_middlewares(config, model_name=model_name),
-            system_prompt=apply_prompt_template(subagent_enabled=subagent_enabled, max_concurrent_subagents=max_concurrent_subagents, available_skills=set(["bootstrap"])),
+            system_prompt=apply_prompt_template(
+                subagent_enabled=subagent_enabled,
+                max_concurrent_subagents=max_concurrent_subagents,
+                available_skills=set(["bootstrap"]),
+                skills_path=_resolve_skills_host_path(),
+            ),
             state_schema=ThreadState,
         )
 
@@ -380,7 +398,11 @@ def make_lead_agent(config: RunnableConfig):
         tools=get_available_tools(model_name=model_name, groups=agent_config.tool_groups if agent_config else None, subagent_enabled=subagent_enabled),
         middleware=_build_middlewares(config, model_name=model_name, agent_name=agent_name),
         system_prompt=apply_prompt_template(
-            subagent_enabled=subagent_enabled, max_concurrent_subagents=max_concurrent_subagents, agent_name=agent_name, available_skills=set(agent_config.skills) if agent_config and agent_config.skills is not None else None
+            subagent_enabled=subagent_enabled,
+            max_concurrent_subagents=max_concurrent_subagents,
+            agent_name=agent_name,
+            available_skills=set(agent_config.skills) if agent_config and agent_config.skills is not None else None,
+            skills_path=_resolve_skills_host_path(),
         ),
         state_schema=ThreadState,
     )

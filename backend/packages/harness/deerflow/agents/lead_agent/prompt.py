@@ -194,11 +194,13 @@ def _build_available_subagents_description(available_names: list[str], bash_avai
     return "\n".join(lines)
 
 
-def _build_subagent_section(max_concurrent: int) -> str:
+def _build_subagent_section(max_concurrent: int, workspace_path: str) -> str:
     """Build the subagent system prompt section with dynamic concurrency limit.
 
     Args:
         max_concurrent: Maximum number of concurrent subagent calls allowed per response.
+        workspace_path: Absolute host path to the thread's workspace directory, used
+            in inline tool-call examples.
 
     Returns:
         Formatted subagent section string.
@@ -214,7 +216,7 @@ def _build_subagent_section(max_concurrent: int) -> str:
     direct_execution_example = (
         '# User asks: "Run the tests"\n# Thinking: Cannot decompose into parallel sub-tasks\n# → Execute directly\n\nbash("npm test")  # Direct execution, not task()'
         if bash_available
-        else '# User asks: "Read the README"\n# Thinking: Single straightforward file read\n# → Execute directly\n\nread_file("/mnt/user-data/workspace/README.md")  # Direct execution, not task()'
+        else f'# User asks: "Read the README"\n# Thinking: Single straightforward file read\n# → Execute directly\n\nread_file("{workspace_path}/README.md")  # Direct execution, not task()'
     )
     return f"""<subagent_system>
 **🚀 SUBAGENT MODE ACTIVE - DECOMPOSE, DELEGATE, SYNTHESIZE**
@@ -437,19 +439,19 @@ You: "Deploying to staging..." [proceed]
 {subagent_section}
 
 <working_directory existed="true">
-- User uploads: `/mnt/user-data/uploads` - Files uploaded by the user (automatically listed in context)
-- User workspace: `/mnt/user-data/workspace` - Working directory for temporary files
-- Output files: `/mnt/user-data/outputs` - Final deliverables must be saved here
+- User uploads: `{uploads_path}` - Files uploaded by the user (automatically listed in context)
+- User workspace: `{workspace_path}` - Working directory for temporary files
+- Output files: `{outputs_path}` - Final deliverables must be saved here
 
 **File Management:**
 - Uploaded files are automatically listed in the <uploaded_files> section before each request
 - Use `read_file` tool to read uploaded files using their paths from the list
 - For PDF, PPT, Excel, and Word files, converted Markdown versions (*.md) are available alongside originals
-- All temporary work happens in `/mnt/user-data/workspace`
-- Treat `/mnt/user-data/workspace` as your default current working directory for coding and file-editing tasks
+- All temporary work happens in `{workspace_path}`
+- Treat `{workspace_path}` as your default current working directory for coding and file-editing tasks
 - When writing scripts or commands that create/read files from the workspace, prefer relative paths such as `hello.txt`, `../uploads/data.csv`, and `../outputs/report.md`
-- Avoid hardcoding `/mnt/user-data/...` inside generated scripts when a relative path from the workspace is enough
-- Final deliverables must be copied to `/mnt/user-data/outputs` and presented using `present_files` tool
+- Avoid hardcoding workspace/uploads/outputs absolute paths inside generated scripts when a relative path from the workspace is enough
+- Final deliverables must be copied to `{outputs_path}` and presented using `present_files` tool
 {acp_section}
 </working_directory>
 
@@ -526,7 +528,7 @@ combined with a FastAPI gateway for REST API access [citation:FastAPI](https://f
 - **Clarification First**: ALWAYS clarify unclear/missing/ambiguous requirements BEFORE starting work - never assume or guess
 {subagent_reminder}- Skill First: Always load the relevant skill before starting **complex** tasks.
 - Progressive Loading: Load resources incrementally as referenced in skills
-- Output Files: Final deliverables must be in `/mnt/user-data/outputs`
+- Output Files: Final deliverables must be in `{outputs_path}`
 - Clarity: Be direct and helpful, avoid unnecessary meta-commentary
 - Including Images and Mermaid: Images and Mermaid diagrams are always welcomed in the Markdown format, and you're encouraged to use `![Image Description](image_path)\n\n` or "```mermaid" to display images in response or Markdown files
 - Multi-task: Better utilize parallel tool calling to call multiple tools at one time for better performance
@@ -572,7 +574,7 @@ def _get_memory_context(agent_name: str | None = None) -> str:
 def _get_cached_skills_prompt_section(
     skill_signature: tuple[tuple[str, str, str, str], ...],
     available_skills_key: tuple[str, ...] | None,
-    container_base_path: str,
+    skills_base_path: str,
     skill_evolution_section: str,
 ) -> str:
     filtered = [(name, description, category, location) for name, description, category, location in skill_signature if available_skills_key is None or name in available_skills_key]
@@ -593,25 +595,39 @@ You have access to skills that provide optimized workflows for specific tasks. E
 4. Load referenced resources only when needed during execution
 5. Follow the skill's instructions precisely
 
-**Skills are located at:** {container_base_path}
+**Skills are located at:** {skills_base_path}
 {skill_evolution_section}
 {skills_list}
 
 </skill_system>"""
 
 
-def get_skills_prompt_section(available_skills: set[str] | None = None) -> str:
-    """Generate the skills prompt section with available skills list."""
+def get_skills_prompt_section(available_skills: set[str] | None = None, skills_path: str | None = None) -> str:
+    """Generate the skills prompt section with available skills list.
+
+    Args:
+        available_skills: Optional filter for which skills to advertise.
+        skills_path: Optional override for the skills directory host path. When
+            ``None`` we resolve it from the app config.
+    """
     skills = _get_enabled_skills()
+
+    skills_base_path: str
+    if skills_path:
+        skills_base_path = skills_path
+    else:
+        try:
+            from deerflow.config import get_app_config
+
+            skills_base_path = str(get_app_config().skills.get_skills_path())
+        except Exception:
+            skills_base_path = "<skills not configured>"
 
     try:
         from deerflow.config import get_app_config
 
-        config = get_app_config()
-        container_base_path = config.skills.container_path
-        skill_evolution_enabled = config.skill_evolution.enabled
+        skill_evolution_enabled = get_app_config().skill_evolution.enabled
     except Exception:
-        container_base_path = "/mnt/skills"
         skill_evolution_enabled = False
 
     if not skills and not skill_evolution_enabled:
@@ -620,12 +636,12 @@ def get_skills_prompt_section(available_skills: set[str] | None = None) -> str:
     if available_skills is not None and not any(skill.name in available_skills for skill in skills):
         return ""
 
-    skill_signature = tuple((skill.name, skill.description, skill.category, skill.get_container_file_path(container_base_path)) for skill in skills)
+    skill_signature = tuple((skill.name, skill.description, skill.category, skill.get_container_file_path(skills_base_path)) for skill in skills)
     available_key = tuple(sorted(available_skills)) if available_skills is not None else None
     if not skill_signature and available_key is not None:
         return ""
     skill_evolution_section = _build_skill_evolution_section(skill_evolution_enabled)
-    return _get_cached_skills_prompt_section(skill_signature, available_key, container_base_path, skill_evolution_section)
+    return _get_cached_skills_prompt_section(skill_signature, available_key, skills_base_path, skill_evolution_section)
 
 
 def get_agent_soul(agent_name: str | None) -> str:
@@ -661,7 +677,7 @@ def get_deferred_tools_prompt_section() -> str:
     return f"<available-deferred-tools>\n{names}\n</available-deferred-tools>"
 
 
-def _build_acp_section() -> str:
+def _build_acp_section(outputs_path: str) -> str:
     """Build the ACP agent prompt section, only if ACP agents are configured."""
     try:
         from deerflow.config.acp_config import get_acp_agents
@@ -674,10 +690,10 @@ def _build_acp_section() -> str:
 
     return (
         "\n**ACP Agent Tasks (invoke_acp_agent):**\n"
-        "- ACP agents (e.g. codex, claude_code) run in their own independent workspace — NOT in `/mnt/user-data/`\n"
-        "- When writing prompts for ACP agents, describe the task only — do NOT reference `/mnt/user-data` paths\n"
+        "- ACP agents (e.g. codex, claude_code) run in their own independent workspace — NOT in your user-data directories\n"
+        "- When writing prompts for ACP agents, describe the task only — do NOT reference workspace/uploads/outputs paths\n"
         "- ACP agent results are accessible at `/mnt/acp-workspace/` (read-only) — use `ls`, `read_file`, or `bash cp` to retrieve output files\n"
-        "- To deliver ACP output to the user: copy from `/mnt/acp-workspace/<file>` to `/mnt/user-data/outputs/<file>`, then use `present_files`"
+        f"- To deliver ACP output to the user: copy from `/mnt/acp-workspace/<file>` to `{outputs_path}/<file>`, then use `present_files`"
     )
 
 
@@ -700,7 +716,7 @@ def _build_custom_mounts_section() -> str:
         lines.append(f"- Custom mount: `{mount.container_path}` - Host directory mapped into the sandbox ({access})")
 
     mounts_list = "\n".join(lines)
-    return f"\n**Custom Mounted Directories:**\n{mounts_list}\n- If the user needs files outside `/mnt/user-data`, use these absolute container paths directly when they match the requested directory"
+    return f"\n**Custom Mounted Directories:**\n{mounts_list}\n- If the user needs files outside the workspace/uploads/outputs directories, use these absolute container paths directly when they match the requested directory"
 
 
 def _resolve_workflow_catalog() -> str | None:
@@ -727,13 +743,29 @@ def _resolve_workflow_catalog() -> str | None:
         return None
 
 
-def apply_prompt_template(subagent_enabled: bool = False, max_concurrent_subagents: int = 3, *, agent_name: str | None = None, available_skills: set[str] | None = None) -> str:
+def apply_prompt_template(
+    subagent_enabled: bool = False,
+    max_concurrent_subagents: int = 3,
+    *,
+    agent_name: str | None = None,
+    available_skills: set[str] | None = None,
+    workspace_path: str | None = None,
+    uploads_path: str | None = None,
+    outputs_path: str | None = None,
+    skills_path: str | None = None,
+) -> str:
+    # Normalize per-thread paths with sensible fallbacks so the template renders
+    # safely when a thread isn't bound yet (e.g. agent construction time).
+    workspace_path = workspace_path or "<workspace not yet initialized>"
+    uploads_path = uploads_path or "<uploads not yet initialized>"
+    outputs_path = outputs_path or "<outputs not yet initialized>"
+
     # Get memory context
     memory_context = _get_memory_context(agent_name)
 
     # Include subagent section only if enabled (from runtime parameter)
     n = max_concurrent_subagents
-    subagent_section = _build_subagent_section(n) if subagent_enabled else ""
+    subagent_section = _build_subagent_section(n, workspace_path) if subagent_enabled else ""
 
     # Add subagent reminder to critical_reminders if enabled
     subagent_reminder = (
@@ -754,13 +786,13 @@ def apply_prompt_template(subagent_enabled: bool = False, max_concurrent_subagen
     )
 
     # Get skills section
-    skills_section = get_skills_prompt_section(available_skills)
+    skills_section = get_skills_prompt_section(available_skills, skills_path=skills_path)
 
     # Get deferred tools section (tool_search)
     deferred_tools_section = get_deferred_tools_prompt_section()
 
     # Build ACP agent section only if ACP agents are configured
-    acp_section = _build_acp_section()
+    acp_section = _build_acp_section(outputs_path)
     custom_mounts_section = _build_custom_mounts_section()
     acp_and_mounts_section = "\n".join(section for section in (acp_section, custom_mounts_section) if section)
 
@@ -775,6 +807,9 @@ def apply_prompt_template(subagent_enabled: bool = False, max_concurrent_subagen
         subagent_reminder=subagent_reminder,
         subagent_thinking=subagent_thinking,
         acp_section=acp_and_mounts_section,
+        workspace_path=workspace_path,
+        uploads_path=uploads_path,
+        outputs_path=outputs_path,
     )
 
     workflow_catalog = _resolve_workflow_catalog()
