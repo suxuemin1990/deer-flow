@@ -11,12 +11,11 @@ from deerflow.config import get_app_config
 from deerflow.config.paths import VIRTUAL_PATH_PREFIX
 from deerflow.sandbox.exceptions import (
     SandboxError,
-    SandboxNotFoundError,
     SandboxRuntimeError,
 )
 from deerflow.sandbox.file_operation_lock import get_file_operation_lock
+from deerflow.sandbox.local_sandbox import get_sandbox
 from deerflow.sandbox.sandbox import Sandbox
-from deerflow.sandbox.sandbox_provider import get_sandbox, get_sandbox_provider
 from deerflow.sandbox.search import GrepMatch
 
 _ABSOLUTE_PATH_PATTERN = re.compile(r"(?<![:\w])(?<!:/)/(?:[^\s\"'`;&|<>()]+)")
@@ -116,71 +115,6 @@ def _resolve_skills_path(path: str) -> str:
 def _is_acp_workspace_path(path: str) -> bool:
     """Check if a path is under the ACP workspace virtual path."""
     return path == _ACP_WORKSPACE_VIRTUAL_PATH or path.startswith(f"{_ACP_WORKSPACE_VIRTUAL_PATH}/")
-
-
-def _get_custom_mounts():
-    """Get custom volume mounts from sandbox config.
-
-    Result is cached after the first successful config load.  If config loading
-    fails an empty list is returned *without* caching so that a later call can
-    pick up the real value once the config is available.
-    """
-    cached = getattr(_get_custom_mounts, "_cached", None)
-    if cached is not None:
-        return cached
-    try:
-        from pathlib import Path
-        from types import SimpleNamespace
-
-        from deerflow.config import get_app_config
-
-        config = get_app_config()
-        mounts = []
-        if config.sandbox is not None:
-            legacy = (getattr(config.sandbox, "__pydantic_extra__", None) or {}).get("mounts") or []
-            wrapped = []
-            for m in legacy:
-                if not isinstance(m, dict):
-                    continue
-                host_path = m.get("host_path")
-                container_path = m.get("container_path")
-                if not host_path or not container_path:
-                    continue
-                wrapped.append(
-                    SimpleNamespace(
-                        host_path=host_path,
-                        container_path=container_path,
-                        read_only=bool(m.get("read_only", False)),
-                    )
-                )
-            # Only include mounts whose host_path exists, consistent with
-            # LocalSandboxProvider._setup_path_mappings() which also filters
-            # by host_path.exists().
-            mounts = [m for m in wrapped if Path(m.host_path).exists()]
-        _get_custom_mounts._cached = mounts  # type: ignore[attr-defined]
-        return mounts
-    except Exception:
-        # If config loading fails, return an empty list without caching so that
-        # a later call can retry once the config is available.
-        return []
-
-
-def _is_custom_mount_path(path: str) -> bool:
-    """Check if path is under a custom mount container_path."""
-    for mount in _get_custom_mounts():
-        if path == mount.container_path or path.startswith(f"{mount.container_path}/"):
-            return True
-    return False
-
-
-def _get_custom_mount_for_path(path: str):
-    """Get the mount config matching this path (longest prefix first)."""
-    best = None
-    for mount in _get_custom_mounts():
-        if path == mount.container_path or path.startswith(f"{mount.container_path}/"):
-            if best is None or len(mount.container_path) > len(best.container_path):
-                best = mount
-    return best
 
 
 def _extract_thread_id_from_thread_data(thread_data: "ThreadDataState | None") -> str | None:
@@ -570,7 +504,6 @@ def validate_local_tool_path(path: str, thread_data: ThreadDataState | None, *, 
       - ``/mnt/user-data/*``  — always allowed (read + write)
       - ``/mnt/skills/*``     — allowed only when *read_only* is True
       - ``/mnt/acp-workspace/*`` — allowed only when *read_only* is True
-      - Custom mount paths (from config.yaml) — respects per-mount ``read_only`` flag
 
     Args:
         path: The virtual path to validate.
@@ -602,14 +535,7 @@ def validate_local_tool_path(path: str, thread_data: ThreadDataState | None, *, 
     if path.startswith(f"{VIRTUAL_PATH_PREFIX}/"):
         return
 
-    # Custom mount paths — respect read_only config
-    if _is_custom_mount_path(path):
-        mount = _get_custom_mount_for_path(path)
-        if mount and mount.read_only and not read_only:
-            raise PermissionError(f"Write access to read-only mount is not allowed: {path}")
-        return
-
-    raise PermissionError(f"Only paths under {VIRTUAL_PATH_PREFIX}/, {_get_skills_container_path()}/, {_ACP_WORKSPACE_VIRTUAL_PATH}/, or configured mount paths are allowed")
+    raise PermissionError(f"Only paths under {VIRTUAL_PATH_PREFIX}/, {_get_skills_container_path()}/, or {_ACP_WORKSPACE_VIRTUAL_PATH}/ are allowed")
 
 
 def _validate_resolved_user_data_path(resolved: Path, thread_data: ThreadDataState) -> None:
@@ -697,11 +623,6 @@ def validate_local_bash_command_paths(command: str, thread_data: ThreadDataState
             _reject_path_traversal(absolute_path)
             continue
 
-        # Allow custom mount container paths
-        if _is_custom_mount_path(absolute_path):
-            _reject_path_traversal(absolute_path)
-            continue
-
         if any(absolute_path == prefix.rstrip("/") or absolute_path.startswith(prefix) for prefix in _LOCAL_BASH_SYSTEM_PATH_PREFIXES):
             continue
 
@@ -746,7 +667,7 @@ def replace_virtual_paths_in_command(command: str, thread_data: ThreadDataState 
 
         result = acp_pattern.sub(replace_acp_match, result)
 
-    # Custom mount paths are resolved by LocalSandbox._resolve_paths_in_command()
+    # Custom mount support has been removed; only known virtual prefixes are translated.
 
     # Replace user-data paths
     if VIRTUAL_PATH_PREFIX in result and thread_data is not None:
@@ -859,16 +780,11 @@ def ensure_sandbox_initialized(runtime: ToolRuntime[ContextT, ThreadState] | Non
     if thread_id is None:
         raise SandboxRuntimeError("Thread ID not available in runtime context")
 
-    provider = get_sandbox_provider()
-    sandbox_id = provider.acquire(thread_id)
-
-    # Retrieve and return the sandbox
-    sandbox = provider.get(sandbox_id)
-    if sandbox is None:
-        raise SandboxNotFoundError("Sandbox not found after acquisition", sandbox_id=sandbox_id)
+    sandbox = get_sandbox()
+    sandbox_id = sandbox.id
 
     if runtime.context is not None:
-        runtime.context["sandbox_id"] = sandbox_id  # Ensure sandbox_id is in context for releasing in after_agent
+        runtime.context["sandbox_id"] = sandbox_id  # Ensure sandbox_id is in context for downstream tool calls.
     return sandbox
 
 
@@ -1039,9 +955,8 @@ def ls_tool(runtime: ToolRuntime[ContextT, ThreadState], description: str, path:
                 path = _resolve_skills_path(path)
             elif _is_acp_workspace_path(path):
                 path = _resolve_acp_workspace_path(path, _extract_thread_id_from_thread_data(thread_data))
-            elif not _is_custom_mount_path(path):
+            else:
                 path = _resolve_and_validate_user_data_path(path, thread_data)
-            # Custom mount paths are resolved by LocalSandbox._resolve_path()
         children = sandbox.list_dir(path)
         if not children:
             return "(empty)"
@@ -1213,9 +1128,8 @@ def read_file_tool(
                 path = _resolve_skills_path(path)
             elif _is_acp_workspace_path(path):
                 path = _resolve_acp_workspace_path(path, _extract_thread_id_from_thread_data(thread_data))
-            elif not _is_custom_mount_path(path):
+            else:
                 path = _resolve_and_validate_user_data_path(path, thread_data)
-            # Custom mount paths are resolved by LocalSandbox._resolve_path()
         content = sandbox.read_file(path)
         if not content:
             return "(empty)"
@@ -1263,9 +1177,7 @@ def write_file_tool(
         if is_local_sandbox(runtime):
             thread_data = get_thread_data(runtime)
             validate_local_tool_path(path, thread_data)
-            if not _is_custom_mount_path(path):
-                path = _resolve_and_validate_user_data_path(path, thread_data)
-            # Custom mount paths are resolved by LocalSandbox._resolve_path()
+            path = _resolve_and_validate_user_data_path(path, thread_data)
         with get_file_operation_lock(sandbox, path):
             sandbox.write_file(path, content, append)
         return "OK"
@@ -1307,9 +1219,7 @@ def str_replace_tool(
         if is_local_sandbox(runtime):
             thread_data = get_thread_data(runtime)
             validate_local_tool_path(path, thread_data)
-            if not _is_custom_mount_path(path):
-                path = _resolve_and_validate_user_data_path(path, thread_data)
-            # Custom mount paths are resolved by LocalSandbox._resolve_path()
+            path = _resolve_and_validate_user_data_path(path, thread_data)
         with get_file_operation_lock(sandbox, path):
             content = sandbox.read_file(path)
             if not content:

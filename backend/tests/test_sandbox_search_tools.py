@@ -1,7 +1,7 @@
 from types import SimpleNamespace
 from unittest.mock import patch
 
-from deerflow.sandbox.local.local_sandbox import LocalSandbox
+from deerflow.sandbox.local_sandbox import LocalSandbox
 from deerflow.sandbox.search import find_glob_matches, find_grep_matches
 from deerflow.sandbox.tools import glob_tool, grep_tool, ls_tool
 

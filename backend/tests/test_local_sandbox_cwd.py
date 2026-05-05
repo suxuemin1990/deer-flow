@@ -1,7 +1,7 @@
 """Verify LocalSandbox.execute_command honors a cwd parameter."""
 import os
 
-from deerflow.sandbox.local.local_sandbox import LocalSandbox
+from deerflow.sandbox.local_sandbox import LocalSandbox
 
 
 def test_execute_command_honors_cwd(tmp_path):

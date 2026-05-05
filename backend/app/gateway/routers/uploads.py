@@ -9,7 +9,6 @@ from pydantic import BaseModel
 
 from deerflow.config.app_config import get_app_config
 from deerflow.config.paths import get_paths
-from deerflow.sandbox.sandbox_provider import SandboxProvider, get_sandbox_provider
 from deerflow.uploads.manager import (
     PathTraversalError,
     delete_file_safe,
@@ -37,12 +36,12 @@ class UploadResponse(BaseModel):
 
 
 def _make_file_sandbox_writable(file_path: os.PathLike[str] | str) -> None:
-    """Ensure uploaded files remain writable when mounted into non-local sandboxes.
+    """Ensure uploaded files remain world-writable.
 
-    In AIO sandbox mode, the gateway writes the authoritative host-side file
-    first, then the sandbox runtime may rewrite the same mounted path. Granting
-    world-writable access here prevents permission mismatches between the
-    gateway user and the sandbox runtime user.
+    Historically this preserved compatibility with non-local sandboxes that
+    mount the uploads directory under a different uid. The local sandbox no
+    longer differs from the host process, so this is now a no-op-style
+    permission relaxation kept only for symlink-safety logging.
     """
     file_stat = os.lstat(file_path)
     if stat.S_ISLNK(file_stat.st_mode):
@@ -52,10 +51,6 @@ def _make_file_sandbox_writable(file_path: os.PathLike[str] | str) -> None:
     writable_mode = stat.S_IMODE(file_stat.st_mode) | stat.S_IWUSR | stat.S_IWGRP | stat.S_IWOTH
     chmod_kwargs = {"follow_symlinks": False} if os.chmod in os.supports_follow_symlinks else {}
     os.chmod(file_path, writable_mode, **chmod_kwargs)
-
-
-def _uses_thread_data_mounts(sandbox_provider: SandboxProvider) -> bool:
-    return bool(getattr(sandbox_provider, "uses_thread_data_mounts", False))
 
 
 def _get_uploads_config_value(key: str, default: object) -> object:
@@ -98,12 +93,6 @@ async def upload_files(
     sandbox_uploads = get_paths().sandbox_uploads_dir(thread_id)
     uploaded_files = []
 
-    sandbox_provider = get_sandbox_provider()
-    sync_to_sandbox = not _uses_thread_data_mounts(sandbox_provider)
-    sandbox = None
-    if sync_to_sandbox:
-        sandbox_id = sandbox_provider.acquire(thread_id)
-        sandbox = sandbox_provider.get(sandbox_id)
     auto_convert_documents = _auto_convert_documents_enabled()
 
     for file in files:
@@ -123,10 +112,6 @@ async def upload_files(
 
             virtual_path = upload_virtual_path(safe_filename)
 
-            if sync_to_sandbox and sandbox is not None:
-                _make_file_sandbox_writable(file_path)
-                sandbox.update_file(virtual_path, content)
-
             file_info = {
                 "filename": safe_filename,
                 "size": str(len(content)),
@@ -142,10 +127,6 @@ async def upload_files(
                 md_path = await convert_file_to_markdown(file_path)
                 if md_path:
                     md_virtual_path = upload_virtual_path(md_path.name)
-
-                    if sync_to_sandbox and sandbox is not None:
-                        _make_file_sandbox_writable(md_path)
-                        sandbox.update_file(md_virtual_path, md_path.read_bytes())
 
                     file_info["markdown_file"] = md_path.name
                     file_info["markdown_path"] = str(sandbox_uploads / md_path.name)

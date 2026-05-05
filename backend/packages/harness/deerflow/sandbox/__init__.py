@@ -1,19 +1,15 @@
-from .sandbox import Sandbox
-from .sandbox_provider import (
-    SandboxProvider,
+from .local_sandbox import (
+    LocalSandbox,
     get_sandbox,
-    get_sandbox_provider,
-    reset_sandbox_provider,
-    set_sandbox_provider,
-    shutdown_sandbox_provider,
+    reset_sandbox_for_tests,
+    set_sandbox_for_tests,
 )
+from .sandbox import Sandbox
 
 __all__ = [
+    "LocalSandbox",
     "Sandbox",
-    "SandboxProvider",
     "get_sandbox",
-    "get_sandbox_provider",
-    "reset_sandbox_provider",
-    "set_sandbox_provider",
-    "shutdown_sandbox_provider",
+    "reset_sandbox_for_tests",
+    "set_sandbox_for_tests",
 ]

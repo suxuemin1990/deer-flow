@@ -13,7 +13,6 @@ from app.channels.base import Channel
 from app.channels.commands import KNOWN_CHANNEL_COMMANDS
 from app.channels.message_bus import InboundMessage, InboundMessageType, MessageBus, OutboundMessage, ResolvedAttachment
 from deerflow.config.paths import VIRTUAL_PATH_PREFIX, get_paths
-from deerflow.sandbox.sandbox_provider import get_sandbox_provider
 
 logger = logging.getLogger(__name__)
 
@@ -372,18 +371,8 @@ class FeishuChannel(Channel):
 
         virtual_path = f"{VIRTUAL_PATH_PREFIX}/uploads/{resolved_target.name}"
 
-        try:
-            sandbox_provider = get_sandbox_provider()
-            sandbox_id = sandbox_provider.acquire(thread_id)
-            if sandbox_id != "local":
-                sandbox = sandbox_provider.get(sandbox_id)
-                if sandbox is None:
-                    logger.warning("[Feishu] sandbox not found for thread_id=%s", thread_id)
-                    return f"Failed to obtain the [{type}]"
-                sandbox.update_file(virtual_path, content)
-        except Exception:
-            logger.exception("[Feishu] failed to sync resource into non-local sandbox: %s", virtual_path)
-            return f"Failed to obtain the [{type}]"
+        # Sandbox isolation has been removed: the file is already on the host
+        # filesystem and no further synchronisation is necessary.
 
         logger.info("[Feishu] downloaded resource mapped: file_key=%s -> %s", file_key, virtual_path)
         return virtual_path
