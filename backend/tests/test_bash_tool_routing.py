@@ -37,7 +37,7 @@ def test_bash_tool_uses_sandbox_execute_command(monkeypatch):
 
     result = bash_tool.func(runtime=runtime, description="test", command="echo hi")
 
-    fake_sandbox.execute_command.assert_called_once_with("echo hi")
+    fake_sandbox.execute_command.assert_called_once_with("echo hi", cwd="/tmp/deer-flow/threads/t1/user-data/workspace")
     assert "hello" in result
 
 

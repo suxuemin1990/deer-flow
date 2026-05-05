@@ -1001,6 +1001,8 @@ def bash_tool(runtime: ToolRuntime[ContextT, ThreadState], description: str, com
     try:
         sandbox = ensure_sandbox_initialized(runtime)
         ensure_thread_directories_exist(runtime)
+        thread_data = get_thread_data(runtime)
+        workspace_cwd = thread_data.get("workspace_path") if thread_data else None
         try:
             from deerflow.config.app_config import get_app_config
 
@@ -1008,7 +1010,7 @@ def bash_tool(runtime: ToolRuntime[ContextT, ThreadState], description: str, com
             max_chars = sandbox_cfg.bash_output_max_chars if sandbox_cfg else 20000
         except Exception:
             max_chars = 20000
-        return _truncate_bash_output(sandbox.execute_command(command), max_chars)
+        return _truncate_bash_output(sandbox.execute_command(command, cwd=workspace_cwd), max_chars)
     except SandboxError as e:
         return f"Error: {e}"
     except PermissionError as e:
