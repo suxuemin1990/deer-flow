@@ -16,11 +16,13 @@ class Sandbox(ABC):
         return self._id
 
     @abstractmethod
-    def execute_command(self, command: str) -> str:
+    def execute_command(self, command: str, *, cwd: str | None = None) -> str:
         """Execute bash command in sandbox.
 
         Args:
             command: The command to execute.
+            cwd: Optional working directory for the command. If None,
+                 inherits the backend process cwd.
 
         Returns:
             The standard or error output of the command.

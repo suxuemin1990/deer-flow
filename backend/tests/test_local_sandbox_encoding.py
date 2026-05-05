@@ -105,6 +105,7 @@ def test_execute_command_uses_powershell_command_mode_on_windows(monkeypatch):
                 "capture_output": True,
                 "text": True,
                 "timeout": 600,
+                    "cwd": None,
             },
         )
     ]
@@ -132,6 +133,7 @@ def test_execute_command_uses_posix_shell_command_mode_on_windows(monkeypatch):
                 "capture_output": True,
                 "text": True,
                 "timeout": 600,
+                    "cwd": None,
             },
         )
     ]
@@ -159,6 +161,7 @@ def test_execute_command_uses_cmd_command_mode_on_windows(monkeypatch):
                 "capture_output": True,
                 "text": True,
                 "timeout": 600,
+                    "cwd": None,
             },
         )
     ]

@@ -267,7 +267,7 @@ class LocalSandbox(Sandbox):
 
         raise RuntimeError("No suitable shell executable found. Tried /bin/zsh, /bin/bash, /bin/sh, and `sh` on PATH.")
 
-    def execute_command(self, command: str) -> str:
+    def execute_command(self, command: str, *, cwd: str | None = None) -> str:
         # Resolve container paths in command before execution
         resolved_command = self._resolve_paths_in_command(command)
         shell = self._get_shell()
@@ -286,6 +286,7 @@ class LocalSandbox(Sandbox):
                 capture_output=True,
                 text=True,
                 timeout=600,
+                cwd=cwd,
             )
         else:
             args = [shell, "-c", resolved_command]
@@ -295,6 +296,7 @@ class LocalSandbox(Sandbox):
                 capture_output=True,
                 text=True,
                 timeout=600,
+                cwd=cwd,
             )
         output = result.stdout
         if result.stderr:
