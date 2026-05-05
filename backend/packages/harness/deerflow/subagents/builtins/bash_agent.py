@@ -2,18 +2,7 @@
 
 from deerflow.subagents.config import SubagentConfig
 
-BASH_AGENT_CONFIG = SubagentConfig(
-    name="bash",
-    description="""Command execution specialist for running bash commands in a separate context.
-
-Use this subagent when:
-- You need to run a series of related bash commands
-- Terminal operations like git, npm, docker, etc.
-- Command output is verbose and would clutter main context
-- Build, test, or deployment operations
-
-Do NOT use for simple single commands - use bash tool directly instead.""",
-    system_prompt="""You are a bash command execution specialist. Execute the requested commands carefully and report results clearly.
+SYSTEM_PROMPT_TEMPLATE = """You are a bash command execution specialist. Execute the requested commands carefully and report results clearly.
 
 <guidelines>
 - Execute commands one at a time when they depend on each other
@@ -35,14 +24,43 @@ For each command or group of commands:
 
 <working_directory>
 You have access to the sandbox environment:
-- User uploads: `/mnt/user-data/uploads`
-- User workspace: `/mnt/user-data/workspace`
-- Output files: `/mnt/user-data/outputs`
+- User uploads: `{uploads_path}`
+- User workspace: `{workspace_path}`
+- Output files: `{outputs_path}`
 - Deployment-configured custom mounts may also be available at other absolute container paths; use them directly when the task references those mounted directories
-- Treat `/mnt/user-data/workspace` as the default working directory for file IO
+- Treat `{workspace_path}` as the default working directory for file IO
 - Prefer relative paths from the workspace, such as `hello.txt`, `../uploads/input.csv`, and `../outputs/result.md`, when composing commands or helper scripts
 </working_directory>
-""",
+"""
+
+
+def build_system_prompt(
+    *,
+    workspace_path: str | None = None,
+    uploads_path: str | None = None,
+    outputs_path: str | None = None,
+    skills_path: str | None = None,
+) -> str:
+    return SYSTEM_PROMPT_TEMPLATE.format(
+        workspace_path=workspace_path or "<workspace not yet initialized>",
+        uploads_path=uploads_path or "<uploads not yet initialized>",
+        outputs_path=outputs_path or "<outputs not yet initialized>",
+        skills_path=skills_path or "<skills not configured>",
+    )
+
+
+BASH_AGENT_CONFIG = SubagentConfig(
+    name="bash",
+    description="""Command execution specialist for running bash commands in a separate context.
+
+Use this subagent when:
+- You need to run a series of related bash commands
+- Terminal operations like git, npm, docker, etc.
+- Command output is verbose and would clutter main context
+- Build, test, or deployment operations
+
+Do NOT use for simple single commands - use bash tool directly instead.""",
+    system_prompt=SYSTEM_PROMPT_TEMPLATE,
     tools=["bash", "ls", "read_file", "write_file", "str_replace"],  # Sandbox tools only
     disallowed_tools=["task", "ask_clarification", "present_files"],
     model="inherit",

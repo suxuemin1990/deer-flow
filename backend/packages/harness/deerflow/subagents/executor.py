@@ -23,6 +23,9 @@ from deerflow.subagents.config import SubagentConfig
 logger = logging.getLogger(__name__)
 
 
+from deerflow.subagents.prompt_resolver import _resolve_system_prompt  # noqa: E402,F401  (re-export for tests)
+
+
 class SubagentStatus(Enum):
     """Status of a subagent execution."""
 
@@ -177,7 +180,7 @@ class SubagentExecutor:
             model=model,
             tools=self.tools,
             middleware=middlewares,
-            system_prompt=self.config.system_prompt,
+            system_prompt=_resolve_system_prompt(self.config, self.thread_data),
             state_schema=ThreadState,
         )
 
