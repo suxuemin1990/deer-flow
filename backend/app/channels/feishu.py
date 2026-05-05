@@ -12,7 +12,7 @@ from typing import Any, Literal
 from app.channels.base import Channel
 from app.channels.commands import KNOWN_CHANNEL_COMMANDS
 from app.channels.message_bus import InboundMessage, InboundMessageType, MessageBus, OutboundMessage, ResolvedAttachment
-from deerflow.config.paths import VIRTUAL_PATH_PREFIX, get_paths
+from deerflow.config.paths import get_paths
 
 logger = logging.getLogger(__name__)
 
@@ -369,7 +369,7 @@ class FeishuChannel(Channel):
             logger.exception("[Feishu] failed to persist downloaded resource: %s, type=%s", resolved_target, type)
             return f"Failed to obtain the [{type}]"
 
-        virtual_path = f"{VIRTUAL_PATH_PREFIX}/uploads/{resolved_target.name}"
+        virtual_path = f"/mnt/user-data/uploads/{resolved_target.name}"
 
         # Sandbox isolation has been removed: the file is already on the host
         # filesystem and no further synchronisation is necessary.

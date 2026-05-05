@@ -349,7 +349,8 @@ def _resolve_attachments(thread_id: str, artifacts: list[str]) -> list[ResolvedA
             logger.warning("[Manager] rejected non-outputs artifact path: %s", virtual_path)
             continue
         try:
-            actual = paths.resolve_virtual_path(thread_id, virtual_path)
+            relative = virtual_path[len(_OUTPUTS_VIRTUAL_PREFIX):]
+            actual = (outputs_dir / relative).resolve()
             # Verify the resolved path is actually under the outputs directory
             # (guards against path-traversal even after prefix check)
             try:

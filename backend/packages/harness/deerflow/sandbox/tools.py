@@ -8,7 +8,6 @@ from langgraph.typing import ContextT
 
 from deerflow.agents.thread_state import ThreadDataState, ThreadState
 from deerflow.config import get_app_config
-from deerflow.config.paths import VIRTUAL_PATH_PREFIX
 from deerflow.sandbox.exceptions import (
     SandboxError,
     SandboxRuntimeError,
@@ -387,18 +386,18 @@ def _thread_virtual_to_actual_mappings(thread_data: ThreadDataState) -> dict[str
     outputs = thread_data.get("outputs_path")
 
     if workspace:
-        mappings[f"{VIRTUAL_PATH_PREFIX}/workspace"] = workspace
+        mappings["/mnt/user-data/workspace"] = workspace
     if uploads:
-        mappings[f"{VIRTUAL_PATH_PREFIX}/uploads"] = uploads
+        mappings["/mnt/user-data/uploads"] = uploads
     if outputs:
-        mappings[f"{VIRTUAL_PATH_PREFIX}/outputs"] = outputs
+        mappings["/mnt/user-data/outputs"] = outputs
 
     # Also map the virtual root when all known dirs share the same parent.
     actual_dirs = [Path(p) for p in (workspace, uploads, outputs) if p]
     if actual_dirs:
         common_parent = str(Path(actual_dirs[0]).parent)
         if all(str(path.parent) == common_parent for path in actual_dirs):
-            mappings[VIRTUAL_PATH_PREFIX] = common_parent
+            mappings["/mnt/user-data"] = common_parent
 
     return mappings
 
@@ -531,10 +530,10 @@ def validate_local_tool_path(path: str, thread_data: ThreadDataState | None, *, 
         return
 
     # User-data paths
-    if path.startswith(f"{VIRTUAL_PATH_PREFIX}/"):
+    if path.startswith("/mnt/user-data/"):
         return
 
-    raise PermissionError(f"Only paths under {VIRTUAL_PATH_PREFIX}/, {_get_skills_container_path()}/, or /mnt/acp-workspace/ are allowed")
+    raise PermissionError(f"Only paths under /mnt/user-data/, {_get_skills_container_path()}/, or /mnt/acp-workspace/ are allowed")
 
 
 def _validate_resolved_user_data_path(resolved: Path, thread_data: ThreadDataState) -> None:
@@ -597,7 +596,7 @@ def validate_local_bash_command_paths(command: str, thread_data: ThreadDataState
     # Block file:// URLs which bypass the absolute-path regex but allow local file exfiltration
     file_url_match = _FILE_URL_PATTERN.search(command)
     if file_url_match:
-        raise PermissionError(f"Unsafe file:// URL in command: {file_url_match.group()}. Use paths under {VIRTUAL_PATH_PREFIX}")
+        raise PermissionError(f"Unsafe file:// URL in command: {file_url_match.group()}. Use paths under /mnt/user-data")
 
     unsafe_paths: list[str] = []
     allowed_paths = _get_mcp_allowed_paths()
@@ -608,7 +607,7 @@ def validate_local_bash_command_paths(command: str, thread_data: ThreadDataState
             _reject_path_traversal(absolute_path)
             continue
 
-        if absolute_path == VIRTUAL_PATH_PREFIX or absolute_path.startswith(f"{VIRTUAL_PATH_PREFIX}/"):
+        if absolute_path == "/mnt/user-data" or absolute_path.startswith("/mnt/user-data/"):
             _reject_path_traversal(absolute_path)
             continue
 
@@ -629,7 +628,7 @@ def validate_local_bash_command_paths(command: str, thread_data: ThreadDataState
 
     if unsafe_paths:
         unsafe = ", ".join(sorted(dict.fromkeys(unsafe_paths)))
-        raise PermissionError(f"Unsafe absolute paths in command: {unsafe}. Use paths under {VIRTUAL_PATH_PREFIX}")
+        raise PermissionError(f"Unsafe absolute paths in command: {unsafe}. Use paths under /mnt/user-data")
 
 
 def replace_virtual_paths_in_command(command: str, thread_data: ThreadDataState | None) -> str:
@@ -669,8 +668,8 @@ def replace_virtual_paths_in_command(command: str, thread_data: ThreadDataState 
     # Custom mount support has been removed; only known virtual prefixes are translated.
 
     # Replace user-data paths
-    if VIRTUAL_PATH_PREFIX in result and thread_data is not None:
-        pattern = re.compile(rf"{re.escape(VIRTUAL_PATH_PREFIX)}(/[^\s\"';&|<>()]*)?")
+    if "/mnt/user-data" in result and thread_data is not None:
+        pattern = re.compile(r"/mnt/user-data(/[^\s\"';&|<>()]*)?")
 
         def replace_user_data_match(match: re.Match) -> str:
             return replace_virtual_path(match.group(0), thread_data)

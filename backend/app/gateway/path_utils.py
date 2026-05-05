@@ -42,7 +42,3 @@ def resolve_thread_artifact_path(thread_id: str, path: str) -> Path:
     except ValueError as exc:
         raise HTTPException(status_code=403, detail="path traversal detected") from exc
     return target
-
-
-# Deprecated: kept as alias for one commit; deleted in Stage 6.5.
-resolve_thread_virtual_path = resolve_thread_artifact_path

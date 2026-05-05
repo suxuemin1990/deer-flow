@@ -3,9 +3,6 @@ import re
 import shutil
 from pathlib import Path, PureWindowsPath
 
-# Virtual path prefix seen by agents inside the sandbox
-VIRTUAL_PATH_PREFIX = "/mnt/user-data"
-
 _SAFE_THREAD_ID_RE = re.compile(r"^[A-Za-z0-9_\-]+$")
 
 
@@ -244,41 +241,6 @@ class Paths:
         thread_dir = self.thread_dir(thread_id)
         if thread_dir.exists():
             shutil.rmtree(thread_dir)
-
-    def resolve_virtual_path(self, thread_id: str, virtual_path: str) -> Path:
-        """Resolve a sandbox virtual path to the actual host filesystem path.
-
-        Args:
-            thread_id: The thread ID.
-            virtual_path: Virtual path as seen inside the sandbox, e.g.
-                          ``/mnt/user-data/outputs/report.pdf``.
-                          Leading slashes are stripped before matching.
-
-        Returns:
-            The resolved absolute host filesystem path.
-
-        Raises:
-            ValueError: If the path does not start with the expected virtual
-                        prefix or a path-traversal attempt is detected.
-        """
-        stripped = virtual_path.lstrip("/")
-        prefix = VIRTUAL_PATH_PREFIX.lstrip("/")
-
-        # Require an exact segment-boundary match to avoid prefix confusion
-        # (e.g. reject paths like "mnt/user-dataX/...").
-        if stripped != prefix and not stripped.startswith(prefix + "/"):
-            raise ValueError(f"Path must start with /{prefix}")
-
-        relative = stripped[len(prefix) :].lstrip("/")
-        base = self.sandbox_user_data_dir(thread_id).resolve()
-        actual = (base / relative).resolve()
-
-        try:
-            actual.relative_to(base)
-        except ValueError:
-            raise ValueError("Access denied: path traversal detected")
-
-        return actual
 
 
 # ── Singleton ────────────────────────────────────────────────────────────

@@ -7,7 +7,7 @@ from pathlib import Path
 from fastapi import APIRouter, HTTPException
 from pydantic import BaseModel, Field
 
-from app.gateway.path_utils import resolve_thread_virtual_path
+from app.gateway.path_utils import resolve_thread_artifact_path
 from deerflow.agents.lead_agent.prompt import refresh_skills_system_prompt_cache_async
 from deerflow.config.extensions_config import ExtensionsConfig, SkillStateConfig, get_extensions_config, reload_extensions_config
 from deerflow.skills import Skill, load_skills
@@ -118,7 +118,7 @@ async def list_skills() -> SkillsListResponse:
 )
 async def install_skill(request: SkillInstallRequest) -> SkillInstallResponse:
     try:
-        skill_file_path = resolve_thread_virtual_path(request.thread_id, request.path)
+        skill_file_path = resolve_thread_artifact_path(request.thread_id, request.path)
         result = install_skill_from_archive(skill_file_path)
         await refresh_skills_system_prompt_cache_async()
         return SkillInstallResponse(**result)

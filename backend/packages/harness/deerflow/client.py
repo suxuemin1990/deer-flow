@@ -1184,7 +1184,19 @@ class DeerFlowClient:
             ValueError: If the path is invalid.
         """
         try:
-            actual = get_paths().resolve_virtual_path(thread_id, path)
+            stripped = path.lstrip("/")
+            prefix = "mnt/user-data"
+            if stripped != prefix and not stripped.startswith(prefix + "/"):
+                raise ValueError(f"Path must start with /{prefix}")
+            relative = stripped[len(prefix) :].lstrip("/")
+            base = get_paths().sandbox_user_data_dir(thread_id).resolve()
+            actual = (base / relative).resolve()
+            try:
+                actual.relative_to(base)
+            except ValueError:
+                from deerflow.uploads.manager import PathTraversalError
+
+                raise PathTraversalError("Path traversal detected") from None
         except ValueError as exc:
             if "traversal" in str(exc):
                 from deerflow.uploads.manager import PathTraversalError
