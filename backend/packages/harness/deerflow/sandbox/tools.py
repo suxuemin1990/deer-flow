@@ -18,7 +18,6 @@ from deerflow.sandbox.file_operation_lock import get_file_operation_lock
 from deerflow.sandbox.sandbox import Sandbox
 from deerflow.sandbox.sandbox_provider import get_sandbox_provider
 from deerflow.sandbox.search import GrepMatch
-from deerflow.sandbox.security import LOCAL_HOST_BASH_DISABLED_MESSAGE, is_host_bash_allowed
 
 _ABSOLUTE_PATH_PATTERN = re.compile(r"(?<![:\w])(?<!:/)/(?:[^\s\"'`;&|<>()]+)")
 _FILE_URL_PATTERN = re.compile(r"\bfile://\S+", re.IGNORECASE)
@@ -1001,9 +1000,6 @@ def bash_tool(runtime: ToolRuntime[ContextT, ThreadState], description: str, com
     """
     try:
         sandbox = ensure_sandbox_initialized(runtime)
-        if is_local_sandbox(runtime):
-            if not is_host_bash_allowed():
-                return f"Error: {LOCAL_HOST_BASH_DISABLED_MESSAGE}"
         ensure_thread_directories_exist(runtime)
         try:
             from deerflow.config.app_config import get_app_config

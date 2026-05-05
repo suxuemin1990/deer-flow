@@ -97,21 +97,6 @@ def test_task_tool_returns_error_for_unknown_subagent(monkeypatch):
     assert result == "Error: Unknown subagent type 'general-purpose'. Available: general-purpose"
 
 
-def test_task_tool_rejects_bash_subagent_when_host_bash_disabled(monkeypatch):
-    monkeypatch.setattr(task_tool_module, "get_subagent_config", lambda _: _make_subagent_config())
-    monkeypatch.setattr(task_tool_module, "is_host_bash_allowed", lambda: False)
-
-    result = _run_task_tool(
-        runtime=_make_runtime(),
-        description="执行任务",
-        prompt="run commands",
-        subagent_type="bash",
-        tool_call_id="tc-bash",
-    )
-
-    assert result.startswith("Error: Bash subagent is disabled")
-
-
 def test_task_tool_emits_running_and_completed_events(monkeypatch):
     config = _make_subagent_config()
     runtime = _make_runtime()

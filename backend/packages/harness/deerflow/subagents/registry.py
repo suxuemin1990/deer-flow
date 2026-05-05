@@ -3,7 +3,6 @@
 import logging
 from dataclasses import replace
 
-from deerflow.sandbox.security import is_host_bash_allowed
 from deerflow.subagents.builtins import BUILTIN_SUBAGENTS
 from deerflow.subagents.config import SubagentConfig
 
@@ -149,13 +148,4 @@ def get_available_subagent_names() -> list[str]:
     Returns:
         List of subagent names visible to the current sandbox configuration.
     """
-    names = get_subagent_names()
-    try:
-        host_bash_allowed = is_host_bash_allowed()
-    except Exception:
-        logger.debug("Could not determine host bash availability; exposing all subagents")
-        return names
-
-    if not host_bash_allowed:
-        names = [name for name in names if name != "bash"]
-    return names
+    return get_subagent_names()

@@ -1,20 +1,10 @@
-"""Tests for subagent availability and prompt exposure under local bash hardening."""
+"""Tests for subagent availability and prompt exposure."""
 
 from deerflow.agents.lead_agent import prompt as prompt_module
 from deerflow.subagents import registry as registry_module
 
 
-def test_get_available_subagent_names_hides_bash_when_host_bash_disabled(monkeypatch) -> None:
-    monkeypatch.setattr(registry_module, "is_host_bash_allowed", lambda: False)
-
-    names = registry_module.get_available_subagent_names()
-
-    assert names == ["general-purpose"]
-
-
-def test_get_available_subagent_names_keeps_bash_when_allowed(monkeypatch) -> None:
-    monkeypatch.setattr(registry_module, "is_host_bash_allowed", lambda: True)
-
+def test_get_available_subagent_names_returns_all_builtins() -> None:
     names = registry_module.get_available_subagent_names()
 
     assert names == ["general-purpose", "bash"]
