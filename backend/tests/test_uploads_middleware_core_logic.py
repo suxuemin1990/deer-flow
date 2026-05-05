@@ -77,16 +77,18 @@ class TestFilesFromKwargs:
         msg = _human("hi", files=[{"filename": "", "size": 100, "path": "/mnt/user-data/uploads/x"}])
         assert mw._files_from_kwargs(msg) is None
 
-    def test_always_uses_virtual_path(self, tmp_path):
-        """path field must be /mnt/user-data/uploads/<filename> regardless of what the frontend sent."""
+    def test_always_uses_resolved_path(self, tmp_path):
+        """path field must be the resolved uploads_dir/<filename> regardless of what the frontend sent."""
         mw = _middleware(tmp_path)
+        uploads_dir = _uploads_dir(tmp_path)
+        (uploads_dir / "report.pdf").write_bytes(b"pdf")
         msg = _human(
             "hi",
             files=[{"filename": "report.pdf", "size": 1024, "path": "/some/arbitrary/path/report.pdf"}],
         )
-        result = mw._files_from_kwargs(msg)
+        result = mw._files_from_kwargs(msg, uploads_dir)
         assert result is not None
-        assert result[0]["path"] == "/mnt/user-data/uploads/report.pdf"
+        assert result[0]["path"] == str(uploads_dir / "report.pdf")
 
     def test_skips_file_that_does_not_exist_on_disk(self, tmp_path):
         mw = _middleware(tmp_path)
@@ -104,7 +106,7 @@ class TestFilesFromKwargs:
         assert result is not None
         assert len(result) == 1
         assert result[0]["filename"] == "data.csv"
-        assert result[0]["path"] == "/mnt/user-data/uploads/data.csv"
+        assert result[0]["path"] == str(uploads_dir / "data.csv")
 
     def test_skips_nonexistent_but_accepts_existing_in_mixed_list(self, tmp_path):
         mw = _middleware(tmp_path)
@@ -151,46 +153,46 @@ class TestFilesFromKwargs:
 
 class TestCreateFilesMessage:
     def _new_file(self, filename="notes.txt", size=1024):
-        return {"filename": filename, "size": size, "path": f"/mnt/user-data/uploads/{filename}"}
+        return {"filename": filename, "size": size, "path": f"/uploads/{filename}"}
 
     def test_new_files_section_always_present(self, tmp_path):
         mw = _middleware(tmp_path)
-        msg = mw._create_files_message([self._new_file()], [])
+        msg = mw._create_files_message([self._new_file()], [], "/uploads")
         assert "<uploaded_files>" in msg
         assert "</uploaded_files>" in msg
         assert "uploaded in this message" in msg
         assert "notes.txt" in msg
-        assert "/mnt/user-data/uploads/notes.txt" in msg
+        assert "/uploads/notes.txt" in msg
 
     def test_historical_section_present_only_when_non_empty(self, tmp_path):
         mw = _middleware(tmp_path)
 
-        msg_no_hist = mw._create_files_message([self._new_file()], [])
+        msg_no_hist = mw._create_files_message([self._new_file()], [], "/uploads")
         assert "previous messages" not in msg_no_hist
 
         hist = self._new_file("old.txt")
-        msg_with_hist = mw._create_files_message([self._new_file()], [hist])
+        msg_with_hist = mw._create_files_message([self._new_file()], [hist], "/uploads")
         assert "previous messages" in msg_with_hist
         assert "old.txt" in msg_with_hist
 
     def test_size_formatting_kb(self, tmp_path):
         mw = _middleware(tmp_path)
-        msg = mw._create_files_message([self._new_file(size=2048)], [])
+        msg = mw._create_files_message([self._new_file(size=2048)], [], "/uploads")
         assert "2.0 KB" in msg
 
     def test_size_formatting_mb(self, tmp_path):
         mw = _middleware(tmp_path)
-        msg = mw._create_files_message([self._new_file(size=2 * 1024 * 1024)], [])
+        msg = mw._create_files_message([self._new_file(size=2 * 1024 * 1024)], [], "/uploads")
         assert "2.0 MB" in msg
 
     def test_read_file_instruction_included(self, tmp_path):
         mw = _middleware(tmp_path)
-        msg = mw._create_files_message([self._new_file()], [])
+        msg = mw._create_files_message([self._new_file()], [], "/uploads")
         assert "read_file" in msg
 
     def test_empty_new_files_produces_empty_marker(self, tmp_path):
         mw = _middleware(tmp_path)
-        msg = mw._create_files_message([], [])
+        msg = mw._create_files_message([], [], "/uploads")
         assert "(empty)" in msg
         assert "<uploaded_files>" in msg
         assert "</uploaded_files>" in msg
@@ -284,12 +286,13 @@ class TestBeforeAgent:
         msg = _human("review", files=[{"filename": "notes.txt", "size": 5, "path": "/mnt/user-data/uploads/notes.txt"}])
         result = mw.before_agent(self._state(msg), _runtime())
 
+        uploads_dir = _uploads_dir(tmp_path)
         assert result is not None
         assert result["uploaded_files"] == [
             {
                 "filename": "notes.txt",
                 "size": 5,
-                "path": "/mnt/user-data/uploads/notes.txt",
+                "path": str(uploads_dir / "notes.txt"),
                 "extension": ".txt",
                 "outline": [],
                 "outline_preview": [],

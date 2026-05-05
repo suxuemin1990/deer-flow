@@ -7,8 +7,14 @@ import pytest
 from langchain_core.messages import AIMessage, HumanMessage, RemoveMessage, ToolMessage
 
 from deerflow.agents.memory.summarization_hook import memory_flush_hook
-from deerflow.agents.middlewares.summarization_middleware import DeerFlowSummarizationMiddleware, SummarizationEvent
+from deerflow.agents.middlewares.summarization_middleware import (
+    DeerFlowSummarizationMiddleware,
+    SummarizationEvent,
+    _resolve_skills_host_path,
+)
 from deerflow.config.memory_config import MemoryConfig
+
+_SKILLS_ROOT = _resolve_skills_host_path()
 
 
 def _messages() -> list:
@@ -58,7 +64,7 @@ def _skill_read_call(tool_id: str, skill: str) -> dict:
     return {
         "name": "read_file",
         "id": tool_id,
-        "args": {"path": f"/mnt/skills/public/{skill}/SKILL.md"},
+        "args": {"path": f"{_SKILLS_ROOT}/public/{skill}/SKILL.md"},
     }
 
 

@@ -81,7 +81,7 @@ class UploadsMiddleware(AgentMiddleware[UploadsMiddlewareState]):
         super().__init__()
         self._paths = Paths(base_dir) if base_dir else get_paths()
 
-    def _format_file_entry(self, file: dict, lines: list[str]) -> None:
+    def _format_file_entry(self, file: dict, lines: list[str], uploads_dir_str: str) -> None:
         """Append a single file entry (name, size, path, optional outline) to lines."""
         size_kb = file["size"] / 1024
         size_str = f"{size_kb:.1f} KB" if size_kb < 1024 else f"{size_kb / 1024:.1f} MB"
@@ -102,10 +102,10 @@ class UploadsMiddleware(AgentMiddleware[UploadsMiddlewareState]):
                 lines.append("  No structural headings detected. Document begins with:")
                 for text in preview:
                     lines.append(f"    > {text}")
-            lines.append("  Use `grep` to search for keywords (e.g. `grep(pattern='keyword', path='/mnt/user-data/uploads/')`).")
+            lines.append(f"  Use `grep` to search for keywords (e.g. `grep(pattern='keyword', path='{uploads_dir_str}/')`).")
         lines.append("")
 
-    def _create_files_message(self, new_files: list[dict], historical_files: list[dict]) -> str:
+    def _create_files_message(self, new_files: list[dict], historical_files: list[dict], uploads_dir_str: str) -> str:
         """Create a formatted message listing uploaded files.
 
         Args:
@@ -113,6 +113,8 @@ class UploadsMiddleware(AgentMiddleware[UploadsMiddlewareState]):
             historical_files: Files uploaded in previous messages.
                 Each file dict may contain an optional ``outline`` key — a list of
                 ``{title, line}`` dicts extracted from the converted Markdown file.
+            uploads_dir_str: Absolute host path to the uploads directory, used in
+                example tool-call snippets.
 
         Returns:
             Formatted string inside <uploaded_files> tags.
@@ -123,7 +125,7 @@ class UploadsMiddleware(AgentMiddleware[UploadsMiddlewareState]):
         lines.append("")
         if new_files:
             for file in new_files:
-                self._format_file_entry(file, lines)
+                self._format_file_entry(file, lines, uploads_dir_str)
         else:
             lines.append("(empty)")
             lines.append("")
@@ -132,14 +134,14 @@ class UploadsMiddleware(AgentMiddleware[UploadsMiddlewareState]):
             lines.append("The following files were uploaded in previous messages and are still available:")
             lines.append("")
             for file in historical_files:
-                self._format_file_entry(file, lines)
+                self._format_file_entry(file, lines, uploads_dir_str)
 
         lines.append("To work with these files:")
         lines.append("- Read from the file first — use the outline line numbers and `read_file` to locate relevant sections.")
         lines.append("- Use `grep` to search for keywords when you are not sure which section to look at")
-        lines.append("  (e.g. `grep(pattern='revenue', path='/mnt/user-data/uploads/')`).")
+        lines.append(f"  (e.g. `grep(pattern='revenue', path='{uploads_dir_str}/')`).")
         lines.append("- Use `glob` to find files by name pattern")
-        lines.append("  (e.g. `glob(pattern='**/*.md', path='/mnt/user-data/uploads/')`).")
+        lines.append(f"  (e.g. `glob(pattern='**/*.md', path='{uploads_dir_str}/')`).")
         lines.append("- Only fall back to web search if the file content is clearly insufficient to answer the question.")
         lines.append("</uploaded_files>")
 
@@ -173,11 +175,12 @@ class UploadsMiddleware(AgentMiddleware[UploadsMiddlewareState]):
                 continue
             if uploads_dir is not None and not (uploads_dir / filename).is_file():
                 continue
+            file_path = str(uploads_dir / filename) if uploads_dir is not None else filename
             files.append(
                 {
                     "filename": filename,
                     "size": int(f.get("size") or 0),
-                    "path": f"/mnt/user-data/uploads/{filename}",
+                    "path": file_path,
                     "extension": Path(filename).suffix,
                 }
             )
@@ -238,7 +241,7 @@ class UploadsMiddleware(AgentMiddleware[UploadsMiddlewareState]):
                         {
                             "filename": file_path.name,
                             "size": stat.st_size,
-                            "path": f"/mnt/user-data/uploads/{file_path.name}",
+                            "path": str(file_path),
                             "extension": file_path.suffix,
                             "outline": outline,
                             "outline_preview": preview,
@@ -259,7 +262,8 @@ class UploadsMiddleware(AgentMiddleware[UploadsMiddlewareState]):
         logger.debug(f"New files: {[f['filename'] for f in new_files]}, historical: {[f['filename'] for f in historical_files]}")
 
         # Create files message and prepend to the last human message content
-        files_message = self._create_files_message(new_files, historical_files)
+        uploads_dir_str = str(uploads_dir) if uploads_dir is not None else "<uploads not available>"
+        files_message = self._create_files_message(new_files, historical_files, uploads_dir_str)
 
         # Extract original content - handle both string and list formats
         original_content = last_message.content

@@ -17,6 +17,22 @@ from langgraph.runtime import Runtime
 logger = logging.getLogger(__name__)
 
 
+def _resolve_skills_host_path() -> str:
+    """Resolve the host filesystem path to the skills directory.
+
+    Used by the summarization middleware to detect skill-loading tool calls so
+    they can be rescued during compaction. Falls back to a sentinel string on
+    failure rather than crashing middleware construction.
+    """
+    try:
+        from deerflow.config import get_app_config
+
+        return str(get_app_config().skills.get_skills_path())
+    except Exception:
+        logger.warning("Failed to resolve skills host path for summarization middleware", exc_info=True)
+        return "<skills not configured>"
+
+
 @dataclass(frozen=True)
 class SummarizationEvent:
     """Context emitted before conversation history is summarized away."""
@@ -101,7 +117,6 @@ class DeerFlowSummarizationMiddleware(SummarizationMiddleware):
     def __init__(
         self,
         *args,
-        skills_container_path: str | None = None,
         skill_file_read_tool_names: Collection[str] | None = None,
         before_summarization: list[BeforeSummarizationHook] | None = None,
         preserve_recent_skill_count: int = 5,
@@ -110,7 +125,7 @@ class DeerFlowSummarizationMiddleware(SummarizationMiddleware):
         **kwargs,
     ) -> None:
         super().__init__(*args, **kwargs)
-        self._skills_container_path = skills_container_path or "/mnt/skills"
+        self._skills_container_path = _resolve_skills_host_path()
         self._skill_file_read_tool_names = frozenset(skill_file_read_tool_names or {"read_file", "read", "view", "cat"})
         self._before_summarization_hooks = before_summarization or []
         self._preserve_recent_skill_count = max(0, preserve_recent_skill_count)

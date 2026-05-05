@@ -253,11 +253,16 @@ def _run_async_update_sync(coro: Awaitable[bool]) -> bool:
 # Matches sentences that describe a file-upload *event* rather than general
 # file-related work.  Deliberately narrow to avoid removing legitimate facts
 # such as "User works with CSV files" or "prefers PDF export".
+#
+# The path-fragment alternative matches any filesystem reference ending in
+# ``/uploads/<filename>`` so we catch both the legacy ``/mnt/user-data/uploads/``
+# layout and the per-thread host paths used after sandbox isolation removal
+# (e.g. ``/var/lib/deerflow/threads/<id>/user-data/uploads/<file>``).
 _UPLOAD_SENTENCE_RE = re.compile(
     r"[^.!?]*\b(?:"
     r"upload(?:ed|ing)?(?:\s+\w+){0,3}\s+(?:file|files?|document|documents?|attachment|attachments?)"
     r"|file\s+upload"
-    r"|/mnt/user-data/uploads/"
+    r"|/[\w./-]*?/uploads/"
     r"|<uploaded_files>"
     r")[^.!?]*[.!?]?\s*",
     re.IGNORECASE,
