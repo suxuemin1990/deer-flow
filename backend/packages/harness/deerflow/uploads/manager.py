@@ -9,7 +9,7 @@ import re
 from pathlib import Path
 from urllib.parse import quote
 
-from deerflow.config.paths import VIRTUAL_PATH_PREFIX, get_paths
+from deerflow.config.paths import get_paths
 
 
 class PathTraversalError(ValueError):
@@ -180,12 +180,16 @@ def upload_artifact_url(thread_id: str, filename: str) -> str:
 
     *filename* is percent-encoded so that spaces, ``#``, ``?`` etc. are safe.
     """
-    return f"/api/threads/{thread_id}/artifacts{VIRTUAL_PATH_PREFIX}/uploads/{quote(filename, safe='')}"
+    return f"/api/threads/{thread_id}/artifacts/uploads/{quote(filename, safe='')}"
 
 
 def upload_virtual_path(filename: str) -> str:
-    """Build the virtual path for a file in the uploads directory."""
-    return f"{VIRTUAL_PATH_PREFIX}/uploads/{filename}"
+    """Build the relative artifact path for a file in the uploads directory.
+
+    Returned as a thread-relative path (``uploads/<filename>``) so callers can
+    join it with whatever URL prefix they need.
+    """
+    return f"uploads/{filename}"
 
 
 def enrich_file_listing(result: dict, thread_id: str) -> dict:

@@ -33,7 +33,7 @@ def test_get_artifact_reads_utf8_text_file_on_windows_locale(tmp_path, monkeypat
         return original_read_text(self, *args, **kwargs)
 
     monkeypatch.setattr(Path, "read_text", read_text_with_gbk_default)
-    monkeypatch.setattr(artifacts_router, "resolve_thread_virtual_path", lambda _thread_id, _path: artifact_path)
+    monkeypatch.setattr(artifacts_router, "resolve_thread_artifact_path", lambda _thread_id, _path: artifact_path)
 
     request = _make_request()
     response = asyncio.run(artifacts_router.get_artifact("thread-1", "mnt/user-data/outputs/note.txt", request))
@@ -47,7 +47,7 @@ def test_get_artifact_forces_download_for_active_content(tmp_path, monkeypatch, 
     artifact_path = tmp_path / filename
     artifact_path.write_text(content, encoding="utf-8")
 
-    monkeypatch.setattr(artifacts_router, "resolve_thread_virtual_path", lambda _thread_id, _path: artifact_path)
+    monkeypatch.setattr(artifacts_router, "resolve_thread_artifact_path", lambda _thread_id, _path: artifact_path)
 
     response = asyncio.run(artifacts_router.get_artifact("thread-1", f"mnt/user-data/outputs/{filename}", _make_request()))
 
@@ -61,7 +61,7 @@ def test_get_artifact_forces_download_for_active_content_in_skill_archive(tmp_pa
     with zipfile.ZipFile(skill_path, "w") as zip_ref:
         zip_ref.writestr(filename, content)
 
-    monkeypatch.setattr(artifacts_router, "resolve_thread_virtual_path", lambda _thread_id, _path: skill_path)
+    monkeypatch.setattr(artifacts_router, "resolve_thread_artifact_path", lambda _thread_id, _path: skill_path)
 
     response = asyncio.run(artifacts_router.get_artifact("thread-1", f"mnt/user-data/outputs/sample.skill/{filename}", _make_request()))
 
@@ -73,7 +73,7 @@ def test_get_artifact_download_false_does_not_force_attachment(tmp_path, monkeyp
     artifact_path = tmp_path / "note.txt"
     artifact_path.write_text("hello", encoding="utf-8")
 
-    monkeypatch.setattr(artifacts_router, "resolve_thread_virtual_path", lambda _thread_id, _path: artifact_path)
+    monkeypatch.setattr(artifacts_router, "resolve_thread_artifact_path", lambda _thread_id, _path: artifact_path)
 
     app = FastAPI()
     app.include_router(artifacts_router.router)
@@ -91,7 +91,7 @@ def test_get_artifact_download_true_forces_attachment_for_skill_archive(tmp_path
     with zipfile.ZipFile(skill_path, "w") as zip_ref:
         zip_ref.writestr("notes.txt", "hello")
 
-    monkeypatch.setattr(artifacts_router, "resolve_thread_virtual_path", lambda _thread_id, _path: skill_path)
+    monkeypatch.setattr(artifacts_router, "resolve_thread_artifact_path", lambda _thread_id, _path: skill_path)
 
     app = FastAPI()
     app.include_router(artifacts_router.router)
@@ -102,3 +102,96 @@ def test_get_artifact_download_true_forces_attachment_for_skill_archive(tmp_path
     assert response.status_code == 200
     assert response.text == "hello"
     assert response.headers.get("content-disposition", "").startswith("attachment;")
+
+
+def test_get_artifact_short_url_resolves_under_user_data(tmp_path, monkeypatch) -> None:
+    """The new short URL ``.../artifacts/uploads/<file>`` resolves to user-data/uploads/."""
+    from app.gateway import path_utils
+
+    user_data = tmp_path / "threads" / "thread-1" / "user-data"
+    (user_data / "uploads").mkdir(parents=True)
+    artifact_path = user_data / "uploads" / "doc.txt"
+    artifact_path.write_text("hello", encoding="utf-8")
+
+    paths_stub = type(
+        "P",
+        (),
+        {"sandbox_user_data_dir": staticmethod(lambda _tid: user_data)},
+    )()
+    monkeypatch.setattr(path_utils, "get_paths", lambda: paths_stub)
+
+    app = FastAPI()
+    app.include_router(artifacts_router.router)
+
+    with TestClient(app) as client:
+        response = client.get("/api/threads/thread-1/artifacts/uploads/doc.txt")
+
+    assert response.status_code == 200
+    assert response.text == "hello"
+
+
+def test_get_artifact_legacy_mnt_url_still_resolves(tmp_path, monkeypatch) -> None:
+    """The legacy URL with ``mnt/user-data/`` prefix keeps working via stripping."""
+    from app.gateway import path_utils
+
+    user_data = tmp_path / "threads" / "thread-1" / "user-data"
+    (user_data / "outputs").mkdir(parents=True)
+    artifact_path = user_data / "outputs" / "report.txt"
+    artifact_path.write_text("legacy", encoding="utf-8")
+
+    paths_stub = type(
+        "P",
+        (),
+        {"sandbox_user_data_dir": staticmethod(lambda _tid: user_data)},
+    )()
+    monkeypatch.setattr(path_utils, "get_paths", lambda: paths_stub)
+
+    app = FastAPI()
+    app.include_router(artifacts_router.router)
+
+    with TestClient(app) as client:
+        response = client.get(
+            "/api/threads/thread-1/artifacts/mnt/user-data/outputs/report.txt"
+        )
+
+    assert response.status_code == 200
+    assert response.text == "legacy"
+
+
+def test_get_artifact_short_url_rejects_traversal(tmp_path, monkeypatch) -> None:
+    from app.gateway import path_utils
+
+    user_data = tmp_path / "threads" / "thread-1" / "user-data"
+    user_data.mkdir(parents=True)
+
+    paths_stub = type(
+        "P",
+        (),
+        {"sandbox_user_data_dir": staticmethod(lambda _tid: user_data)},
+    )()
+    monkeypatch.setattr(path_utils, "get_paths", lambda: paths_stub)
+
+    app = FastAPI()
+    app.include_router(artifacts_router.router)
+
+    with TestClient(app) as client:
+        response = client.get("/api/threads/thread-1/artifacts/../../../etc/passwd")
+
+    assert response.status_code in (400, 403, 404)
+
+
+def test_upload_artifact_url_returns_short_form() -> None:
+    from deerflow.uploads.manager import upload_artifact_url
+
+    url = upload_artifact_url("thread-1", "report.pdf")
+    assert url == "/api/threads/thread-1/artifacts/uploads/report.pdf"
+    assert "/mnt/user-data" not in url
+
+
+def test_upload_artifact_url_percent_encodes_filename() -> None:
+    from deerflow.uploads.manager import upload_artifact_url
+
+    url = upload_artifact_url("thread-1", "my file?name.pdf")
+    assert "/api/threads/thread-1/artifacts/uploads/" in url
+    assert " " not in url
+    assert "?" not in url
