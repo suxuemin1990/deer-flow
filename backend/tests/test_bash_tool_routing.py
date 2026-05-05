@@ -69,7 +69,6 @@ def test_bash_tool_no_host_bash_gate():
 
     with patch("deerflow.sandbox.tools.ensure_sandbox_initialized", return_value=fake_sandbox), \
          patch("deerflow.sandbox.tools.ensure_thread_directories_exist"), \
-         patch("deerflow.sandbox.security.get_app_config", return_value=fake_config), \
          patch("deerflow.config.app_config.get_app_config", return_value=fake_config):
         result = bash_tool.func(runtime=fake_runtime, description="test", command="true")
 
