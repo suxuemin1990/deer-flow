@@ -394,7 +394,7 @@ export default function ProgressiveSkillsAnimation() {
             initial={{ opacity: 0 }}
             animate={{ opacity: 1 }}
           >
-            /mnt/skills/
+            ~/skills/
           </motion.div>
 
           <div className="space-y-2">
