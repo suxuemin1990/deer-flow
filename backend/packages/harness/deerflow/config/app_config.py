@@ -294,7 +294,37 @@ def _load_and_cache_app_config(config_path: str | None = None) -> AppConfig:
     _app_config_path = resolved_path
     _app_config_mtime = _get_config_mtime(resolved_path)
     _app_config_is_custom = False
+    warn_on_legacy_sandbox_use(_app_config)
     return _app_config
+
+
+_warned_legacy_sandbox_use: set[str] = set()
+
+
+def warn_on_legacy_sandbox_use(config: AppConfig) -> None:
+    """Log a one-time deprecation warning if legacy sandbox.use is present.
+
+    Sandbox isolation has been removed; the ``sandbox.use`` field is silently
+    accepted via ``extra="allow"`` for backwards-compat but no longer has any
+    effect. Each distinct legacy value warns at most once per process.
+    """
+    sandbox = getattr(config, "sandbox", None)
+    if sandbox is None:
+        return
+    extra = getattr(sandbox, "__pydantic_extra__", None) or {}
+    legacy_use = extra.get("use")
+    if not legacy_use:
+        return
+    key = str(legacy_use)
+    if key in _warned_legacy_sandbox_use:
+        return
+    _warned_legacy_sandbox_use.add(key)
+    logger.warning(
+        "sandbox.use=%s is no longer supported; sandbox isolation has been "
+        "removed. The field will be ignored. Remove it from config.yaml to "
+        "silence this warning.",
+        legacy_use,
+    )
 
 
 def get_app_config() -> AppConfig:
