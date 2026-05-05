@@ -3,46 +3,23 @@ from typing import Annotated
 
 from langchain.tools import InjectedToolCallId, ToolRuntime, tool
 from langchain_core.messages import ToolMessage
-from langgraph.config import get_config
 from langgraph.types import Command
 from langgraph.typing import ContextT
 
 from deerflow.agents.thread_state import ThreadState
-from deerflow.config.paths import VIRTUAL_PATH_PREFIX, get_paths
-
-OUTPUTS_VIRTUAL_PREFIX = f"{VIRTUAL_PATH_PREFIX}/outputs"
-
-
-def _get_thread_id(runtime: ToolRuntime[ContextT, ThreadState]) -> str | None:
-    """Resolve the current thread id from runtime context or RunnableConfig."""
-    thread_id = runtime.context.get("thread_id") if runtime.context else None
-    if thread_id:
-        return thread_id
-
-    runtime_config = getattr(runtime, "config", None) or {}
-    thread_id = runtime_config.get("configurable", {}).get("thread_id")
-    if thread_id:
-        return thread_id
-
-    try:
-        return get_config().get("configurable", {}).get("thread_id")
-    except RuntimeError:
-        return None
 
 
 def _normalize_presented_filepath(
     runtime: ToolRuntime[ContextT, ThreadState],
     filepath: str,
 ) -> str:
-    """Normalize a presented file path to the `/mnt/user-data/outputs/*` contract.
+    """Normalize a presented file path and verify it lives under the thread's outputs.
 
-    Accepts either:
-    - A virtual sandbox path such as `/mnt/user-data/outputs/report.md`
-    - A host-side thread outputs path such as
-      `/app/backend/.deer-flow/threads/<thread>/user-data/outputs/report.md`
+    Accepts an absolute host path and validates it stays inside the
+    ``thread_data.outputs_path`` directory.
 
     Returns:
-        The normalized virtual path.
+        The absolute (resolved) host path string.
 
     Raises:
         ValueError: If runtime metadata is missing or the path is outside the
@@ -51,30 +28,19 @@ def _normalize_presented_filepath(
     if runtime.state is None:
         raise ValueError("Thread runtime state is not available")
 
-    thread_id = _get_thread_id(runtime)
-    if not thread_id:
-        raise ValueError("Thread ID is not available in runtime context or runtime config")
-
     thread_data = runtime.state.get("thread_data") or {}
     outputs_path = thread_data.get("outputs_path")
     if not outputs_path:
-        raise ValueError("Thread outputs path is not available in runtime state")
+        raise ValueError("thread_data.outputs_path is not initialized")
 
-    outputs_dir = Path(outputs_path).resolve()
-    stripped = filepath.lstrip("/")
-    virtual_prefix = VIRTUAL_PATH_PREFIX.lstrip("/")
-
-    if stripped == virtual_prefix or stripped.startswith(virtual_prefix + "/"):
-        actual_path = get_paths().resolve_virtual_path(thread_id, filepath)
-    else:
-        actual_path = Path(filepath).expanduser().resolve()
-
+    abs_path = Path(filepath).expanduser().resolve()
+    outputs_root = Path(outputs_path).resolve()
     try:
-        relative_path = actual_path.relative_to(outputs_dir)
+        abs_path.relative_to(outputs_root)
     except ValueError as exc:
-        raise ValueError(f"Only files in {OUTPUTS_VIRTUAL_PREFIX} can be presented: {filepath}") from exc
+        raise ValueError(f"path {filepath} is outside the outputs directory {outputs_path}") from exc
 
-    return f"{OUTPUTS_VIRTUAL_PREFIX}/{relative_path.as_posix()}"
+    return str(abs_path)
 
 
 @tool("present_files", parse_docstring=True)
@@ -96,11 +62,11 @@ def present_file_tool(
     - For temporary or intermediate files not meant for user viewing
 
     Notes:
-    - You should call this tool after creating files and moving them to the `/mnt/user-data/outputs` directory.
+    - Only files inside your thread's outputs directory can be presented.
     - This tool can be safely called in parallel with other tools. State updates are handled by a reducer to prevent conflicts.
 
     Args:
-        filepaths: List of absolute file paths to present to the user. **Only** files in `/mnt/user-data/outputs` can be presented.
+        filepaths: List of absolute host paths to present to the user. **Only** paths under your outputs directory are accepted.
     """
     try:
         normalized_paths = [_normalize_presented_filepath(runtime, filepath) for filepath in filepaths]

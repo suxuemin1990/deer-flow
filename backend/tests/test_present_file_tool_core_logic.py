@@ -14,7 +14,7 @@ def _make_runtime(outputs_path: str) -> SimpleNamespace:
     )
 
 
-def test_present_files_normalizes_host_outputs_path(tmp_path):
+def test_present_files_accepts_host_path_under_outputs(tmp_path):
     outputs_dir = tmp_path / "threads" / "thread-1" / "user-data" / "outputs"
     outputs_dir.mkdir(parents=True)
     artifact_path = outputs_dir / "report.md"
@@ -26,56 +26,8 @@ def test_present_files_normalizes_host_outputs_path(tmp_path):
         tool_call_id="tc-1",
     )
 
-    assert result.update["artifacts"] == ["/mnt/user-data/outputs/report.md"]
-    assert result.update["messages"][0].content == "Successfully presented files"
-
-
-def test_present_files_keeps_virtual_outputs_path(tmp_path, monkeypatch):
-    outputs_dir = tmp_path / "threads" / "thread-1" / "user-data" / "outputs"
-    outputs_dir.mkdir(parents=True)
-    artifact_path = outputs_dir / "summary.json"
-    artifact_path.write_text("{}")
-
-    monkeypatch.setattr(
-        present_file_tool_module,
-        "get_paths",
-        lambda: SimpleNamespace(resolve_virtual_path=lambda thread_id, path: artifact_path),
-    )
-
-    result = present_file_tool_module.present_file_tool.func(
-        runtime=_make_runtime(str(outputs_dir)),
-        filepaths=["/mnt/user-data/outputs/summary.json"],
-        tool_call_id="tc-2",
-    )
-
-    assert result.update["artifacts"] == ["/mnt/user-data/outputs/summary.json"]
-
-
-def test_present_files_uses_config_thread_id_when_context_missing(tmp_path, monkeypatch):
-    outputs_dir = tmp_path / "threads" / "thread-from-config" / "user-data" / "outputs"
-    outputs_dir.mkdir(parents=True)
-    artifact_path = outputs_dir / "summary.json"
-    artifact_path.write_text("{}")
-
-    monkeypatch.setattr(
-        present_file_tool_module,
-        "get_paths",
-        lambda: SimpleNamespace(resolve_virtual_path=lambda thread_id, path: artifact_path),
-    )
-
-    runtime = SimpleNamespace(
-        state={"thread_data": {"outputs_path": str(outputs_dir)}},
-        context={},
-        config={"configurable": {"thread_id": "thread-from-config"}},
-    )
-
-    result = present_file_tool_module.present_file_tool.func(
-        runtime=runtime,
-        filepaths=["/mnt/user-data/outputs/summary.json"],
-        tool_call_id="tc-config",
-    )
-
-    assert result.update["artifacts"] == ["/mnt/user-data/outputs/summary.json"]
+    assert result.update["artifacts"] == [str(artifact_path)]
+    assert all("/mnt/user-data" not in p for p in result.update["artifacts"])
     assert result.update["messages"][0].content == "Successfully presented files"
 
 
@@ -94,4 +46,23 @@ def test_present_files_rejects_paths_outside_outputs(tmp_path):
     )
 
     assert "artifacts" not in result.update
-    assert result.update["messages"][0].content == f"Error: Only files in /mnt/user-data/outputs can be presented: {leaked_path}"
+    msg = result.update["messages"][0].content
+    assert "outside" in msg.lower()
+    assert str(leaked_path) in msg
+
+
+def test_present_files_requires_outputs_path(tmp_path):
+    runtime = SimpleNamespace(
+        state={"thread_data": {}},
+        context={"thread_id": "thread-1"},
+        config={},
+    )
+
+    result = present_file_tool_module.present_file_tool.func(
+        runtime=runtime,
+        filepaths=[str(tmp_path / "x.txt")],
+        tool_call_id="tc-4",
+    )
+
+    assert "artifacts" not in result.update
+    assert "outputs_path" in result.update["messages"][0].content
