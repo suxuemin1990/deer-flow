@@ -90,7 +90,6 @@ async def task_tool(
         overrides["max_turns"] = max_turns
 
     # Extract parent context from runtime
-    sandbox_state = None
     thread_data = None
     thread_id = None
     parent_model = None
@@ -98,7 +97,6 @@ async def task_tool(
     metadata: dict = {}
 
     if runtime is not None:
-        sandbox_state = runtime.state.get("sandbox")
         thread_data = runtime.state.get("thread_data")
         thread_id = runtime.context.get("thread_id") if runtime.context else None
         if thread_id is None:
@@ -133,7 +131,6 @@ async def task_tool(
         config=config,
         tools=tools,
         parent_model=parent_model,
-        sandbox_state=sandbox_state,
         thread_data=thread_data,
         thread_id=thread_id,
         trace_id=trace_id,

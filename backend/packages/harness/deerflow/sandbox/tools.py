@@ -795,10 +795,8 @@ def is_local_sandbox(runtime: ToolRuntime[ContextT, ThreadState] | None) -> bool
         return False
     if runtime.state is None:
         return False
-    sandbox_state = runtime.state.get("sandbox")
-    if sandbox_state is None:
-        return False
-    return sandbox_state.get("sandbox_id") == "local"
+    sandbox_id = runtime.context.get("sandbox_id") if runtime.context else None
+    return sandbox_id == "local"
 
 
 def sandbox_from_runtime(runtime: ToolRuntime[ContextT, ThreadState] | None = None) -> Sandbox:
@@ -815,12 +813,9 @@ def sandbox_from_runtime(runtime: ToolRuntime[ContextT, ThreadState] | None = No
         raise SandboxRuntimeError("Tool runtime not available")
     if runtime.state is None:
         raise SandboxRuntimeError("Tool runtime state not available")
-    sandbox_state = runtime.state.get("sandbox")
-    if sandbox_state is None:
-        raise SandboxRuntimeError("Sandbox state not initialized in runtime")
-    sandbox_id = sandbox_state.get("sandbox_id")
+    sandbox_id = runtime.context.get("sandbox_id") if runtime.context else None
     if sandbox_id is None:
-        raise SandboxRuntimeError("Sandbox ID not found in state")
+        raise SandboxRuntimeError("Sandbox ID not found in runtime context")
     sandbox = get_sandbox_provider().get(sandbox_id)
     if sandbox is None:
         raise SandboxNotFoundError(f"Sandbox with ID '{sandbox_id}' not found", sandbox_id=sandbox_id)
@@ -854,17 +849,13 @@ def ensure_sandbox_initialized(runtime: ToolRuntime[ContextT, ThreadState] | Non
     if runtime.state is None:
         raise SandboxRuntimeError("Tool runtime state not available")
 
-    # Check if sandbox already exists in state
-    sandbox_state = runtime.state.get("sandbox")
-    if sandbox_state is not None:
-        sandbox_id = sandbox_state.get("sandbox_id")
-        if sandbox_id is not None:
-            sandbox = get_sandbox_provider().get(sandbox_id)
-            if sandbox is not None:
-                if runtime.context is not None:
-                    runtime.context["sandbox_id"] = sandbox_id  # Ensure sandbox_id is in context for releasing in after_agent
-                return sandbox
-            # Sandbox was released, fall through to acquire new one
+    # Check if sandbox already exists in runtime context
+    sandbox_id = runtime.context.get("sandbox_id") if runtime.context else None
+    if sandbox_id is not None:
+        sandbox = get_sandbox_provider().get(sandbox_id)
+        if sandbox is not None:
+            return sandbox
+        # Sandbox was released, fall through to acquire new one
 
     # Lazy acquisition: get thread_id and acquire sandbox
     thread_id = runtime.context.get("thread_id") if runtime.context else None
@@ -875,9 +866,6 @@ def ensure_sandbox_initialized(runtime: ToolRuntime[ContextT, ThreadState] | Non
 
     provider = get_sandbox_provider()
     sandbox_id = provider.acquire(thread_id)
-
-    # Update runtime state - this persists across tool calls
-    runtime.state["sandbox"] = {"sandbox_id": sandbox_id}
 
     # Retrieve and return the sandbox
     sandbox = provider.get(sandbox_id)

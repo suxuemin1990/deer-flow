@@ -15,14 +15,13 @@ def _make_runtime(tmp_path):
     outputs.mkdir()
     return SimpleNamespace(
         state={
-            "sandbox": {"sandbox_id": "local"},
             "thread_data": {
                 "workspace_path": str(workspace),
                 "uploads_path": str(uploads),
                 "outputs_path": str(outputs),
             },
         },
-        context={"thread_id": "thread-1"},
+        context={"thread_id": "thread-1", "sandbox_id": "local"},
     )
 
 

@@ -1,14 +1,18 @@
 import logging
-from typing import NotRequired, override
+from typing import NotRequired, TypedDict, override
 
 from langchain.agents import AgentState
 from langchain.agents.middleware import AgentMiddleware
 from langgraph.runtime import Runtime
 
-from deerflow.agents.thread_state import SandboxState, ThreadDataState
+from deerflow.agents.thread_state import ThreadDataState
 from deerflow.sandbox import get_sandbox_provider
 
 logger = logging.getLogger(__name__)
+
+
+class SandboxState(TypedDict):
+    sandbox_id: NotRequired[str | None]
 
 
 class SandboxMiddlewareState(AgentState):
