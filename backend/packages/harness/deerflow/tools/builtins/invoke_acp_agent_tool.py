@@ -11,6 +11,10 @@ from pydantic import BaseModel, Field
 
 logger = logging.getLogger(__name__)
 
+# Container path inside the ACP agent's own sandbox container; surfaced in the
+# tool description so the LLM knows where to read ACP-produced files.
+_ACP_WORKSPACE_VIRTUAL_PATH = "/mnt/acp-workspace"
+
 
 class _InvokeACPAgentInput(BaseModel):
     agent: str = Field(description="Name of the ACP agent to invoke")
@@ -155,7 +159,7 @@ def build_invoke_acp_agent_tool(agents: dict) -> BaseTool:
         "IMPORTANT: ACP agents operate in their own independent workspace. "
         "Do NOT include /mnt/user-data paths in the prompt. "
         "Give the agent a self-contained task description — it will produce results in its own workspace. "
-        "After the agent completes, its output files are accessible at /mnt/acp-workspace/ (read-only)."
+        f"After the agent completes, its output files are accessible at {_ACP_WORKSPACE_VIRTUAL_PATH}/ (read-only)."
     )
 
     # Capture agents in closure so the function can reference it

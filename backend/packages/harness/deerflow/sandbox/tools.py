@@ -30,7 +30,6 @@ _LOCAL_BASH_SYSTEM_PATH_PREFIXES = (
 )
 
 _DEFAULT_SKILLS_CONTAINER_PATH = "/mnt/skills"
-_ACP_WORKSPACE_VIRTUAL_PATH = "/mnt/acp-workspace"
 _DEFAULT_GLOB_MAX_RESULTS = 200
 _MAX_GLOB_MAX_RESULTS = 1000
 _DEFAULT_GREP_MAX_RESULTS = 100
@@ -114,7 +113,7 @@ def _resolve_skills_path(path: str) -> str:
 
 def _is_acp_workspace_path(path: str) -> bool:
     """Check if a path is under the ACP workspace virtual path."""
-    return path == _ACP_WORKSPACE_VIRTUAL_PATH or path.startswith(f"{_ACP_WORKSPACE_VIRTUAL_PATH}/")
+    return path == "/mnt/acp-workspace" or path.startswith("/mnt/acp-workspace/")
 
 
 def _extract_thread_id_from_thread_data(thread_data: "ThreadDataState | None") -> str | None:
@@ -195,10 +194,10 @@ def _resolve_acp_workspace_path(path: str, thread_id: str | None = None) -> str:
     if host_path is None:
         raise FileNotFoundError(f"ACP workspace directory not available for path: {path}")
 
-    if path == _ACP_WORKSPACE_VIRTUAL_PATH:
+    if path == "/mnt/acp-workspace":
         return host_path
 
-    relative = path[len(_ACP_WORKSPACE_VIRTUAL_PATH) :].lstrip("/")
+    relative = path[len("/mnt/acp-workspace") :].lstrip("/")
     resolved = _join_path_preserving_style(host_path, relative)
 
     if "/" in host_path and "\\" not in host_path:
@@ -448,9 +447,9 @@ def mask_local_paths_in_output(output: str, thread_data: ThreadDataState | None)
             def replace_acp(match: re.Match, _base: str = base) -> str:
                 matched_path = match.group(0)
                 if matched_path == _base:
-                    return _ACP_WORKSPACE_VIRTUAL_PATH
+                    return "/mnt/acp-workspace"
                 relative = matched_path[len(_base) :].lstrip("/\\")
-                return f"{_ACP_WORKSPACE_VIRTUAL_PATH}/{relative}" if relative else _ACP_WORKSPACE_VIRTUAL_PATH
+                return f"/mnt/acp-workspace/{relative}" if relative else "/mnt/acp-workspace"
 
             result = pattern.sub(replace_acp, result)
 
@@ -535,7 +534,7 @@ def validate_local_tool_path(path: str, thread_data: ThreadDataState | None, *, 
     if path.startswith(f"{VIRTUAL_PATH_PREFIX}/"):
         return
 
-    raise PermissionError(f"Only paths under {VIRTUAL_PATH_PREFIX}/, {_get_skills_container_path()}/, or {_ACP_WORKSPACE_VIRTUAL_PATH}/ are allowed")
+    raise PermissionError(f"Only paths under {VIRTUAL_PATH_PREFIX}/, {_get_skills_container_path()}/, or /mnt/acp-workspace/ are allowed")
 
 
 def _validate_resolved_user_data_path(resolved: Path, thread_data: ThreadDataState) -> None:
@@ -659,8 +658,8 @@ def replace_virtual_paths_in_command(command: str, thread_data: ThreadDataState 
     # Replace ACP workspace paths
     _thread_id = _extract_thread_id_from_thread_data(thread_data)
     acp_host = _get_acp_workspace_host_path(_thread_id)
-    if acp_host and _ACP_WORKSPACE_VIRTUAL_PATH in result:
-        acp_pattern = re.compile(rf"{re.escape(_ACP_WORKSPACE_VIRTUAL_PATH)}(/[^\s\"';&|<>()]*)?")
+    if acp_host and "/mnt/acp-workspace" in result:
+        acp_pattern = re.compile(r"/mnt/acp-workspace(/[^\s\"';&|<>()]*)?")
 
         def replace_acp_match(match: re.Match, _tid: str | None = _thread_id) -> str:
             return _resolve_acp_workspace_path(match.group(0), _tid)
