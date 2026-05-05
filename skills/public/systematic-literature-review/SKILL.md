@@ -5,6 +5,8 @@ description: Use this skill when the user wants a systematic literature review, 
 
 # Systematic Literature Review Skill
 
+> Note: `<WORKSPACE_DIR>`, `<UPLOADS_DIR>`, and `<OUTPUTS_DIR>` are absolute paths to the agent's working directories; their concrete values are provided in the agent's system prompt.
+
 ## Overview
 
 This skill produces a structured **systematic literature review (SLR)** across multiple academic papers on a research topic. Given a topic query, it searches arXiv, extracts structured metadata (research question, methodology, key findings, limitations) from each paper in parallel, synthesizes themes across the full set, and emits a final report with consistent citations.
@@ -38,7 +40,7 @@ Before doing any retrieval, confirm the following with the user. If any of these
 - **Topic**: the research area in plain English (e.g. "transformer attention variants").
 - **Scope**: how many papers (default 20, hard upper bound 50), optional time window (e.g. "last 2 years"), optional arXiv category (e.g. `cs.CL`, `cs.CV`).
 - **Citation format**: APA, IEEE, or BibTeX (default APA if the user does not specify and does not seem to be writing for a specific venue).
-- **Output location**: where to save the final report (default `/mnt/user-data/outputs/`).
+- **Output location**: where to save the final report (default `<OUTPUTS_DIR>/`).
 
 If the user says "50+ papers", politely cap it at 50 and explain that synthesis quality degrades quickly past that — for larger surveys they should split by sub-topic.
 
@@ -47,7 +49,7 @@ If the user says "50+ papers", politely cap it at 50 and explain that synthesis 
 Call the bundled search script. Do **not** try to scrape arXiv by other means and do **not** write your own HTTP client — this script handles URL encoding, Atom XML parsing, and id normalization correctly.
 
 ```bash
-python /mnt/skills/public/systematic-literature-review/scripts/arxiv_search.py \
+python ./scripts/arxiv_search.py \
   "<topic>" \
   --max-results <N> \
   [--category <cat>] \
@@ -183,7 +185,7 @@ Each template contains both the citation rules and a full report structure (exec
 
 ### Phase 5: Save and present
 
-Save the full report to `/mnt/user-data/outputs/slr-<topic-slug>-<YYYYMMDD>.md` where `<topic-slug>` is a lowercased hyphenated version of the topic (e.g. `transformer-attention`). Then call the `present_files` tool with that path so the user can download it.
+Save the full report to `<OUTPUTS_DIR>/slr-<topic-slug>-<YYYYMMDD>.md` where `<topic-slug>` is a lowercased hyphenated version of the topic (e.g. `transformer-attention`). Then call the `present_files` tool with that path so the user can download it.
 
 **In the chat message**, show a short preview so the user immediately sees value without opening the file:
 

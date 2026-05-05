@@ -5,6 +5,8 @@ description: Use this skill when the user requests to generate, create, or produ
 
 # Podcast Generation Skill
 
+> Note: `<WORKSPACE_DIR>`, `<UPLOADS_DIR>`, and `<OUTPUTS_DIR>` are absolute paths to the agent's working directories; their concrete values are provided in the agent's system prompt.
+
 ## Overview
 
 This skill generates high-quality podcast audio from text content. The workflow includes creating a structured JSON script (conversational dialogue) and executing audio generation through text-to-speech synthesis.
@@ -26,11 +28,11 @@ When a user requests podcast generation, identify:
 - Source content: The text/article/report to convert into a podcast
 - Language: English or Chinese (based on content)
 - Output location: Where to save the generated podcast
-- You don't need to check the folder under `/mnt/user-data`
+- You don't need to check the workspace directory
 
 ### Step 2: Create Structured Script JSON
 
-Generate a structured JSON script file in `/mnt/user-data/workspace/` with naming pattern: `{descriptive-name}-script.json`
+Generate a structured JSON script file in `<WORKSPACE_DIR>/` with naming pattern: `{descriptive-name}-script.json`
 
 The JSON structure:
 ```json
@@ -47,10 +49,10 @@ The JSON structure:
 
 Call the Python script:
 ```bash
-python /mnt/skills/public/podcast-generation/scripts/generate.py \
-  --script-file /mnt/user-data/workspace/script-file.json \
-  --output-file /mnt/user-data/outputs/generated-podcast.mp3 \
-  --transcript-file /mnt/user-data/outputs/generated-podcast-transcript.md
+python ./scripts/generate.py \
+  --script-file <WORKSPACE_DIR>/script-file.json \
+  --output-file <OUTPUTS_DIR>/generated-podcast.mp3 \
+  --transcript-file <OUTPUTS_DIR>/generated-podcast-transcript.md
 ```
 
 Parameters:
@@ -116,7 +118,7 @@ When creating the script JSON, follow these guidelines:
 
 User request: "Generate a podcast about the history of artificial intelligence"
 
-Step 1: Create script file `/mnt/user-data/workspace/ai-history-script.json`:
+Step 1: Create script file `<WORKSPACE_DIR>/ai-history-script.json`:
 ```json
 {
   "title": "The History of Artificial Intelligence",
@@ -135,10 +137,10 @@ Step 1: Create script file `/mnt/user-data/workspace/ai-history-script.json`:
 
 Step 2: Execute generation:
 ```bash
-python /mnt/skills/public/podcast-generation/scripts/generate.py \
-  --script-file /mnt/user-data/workspace/ai-history-script.json \
-  --output-file /mnt/user-data/outputs/ai-history-podcast.mp3 \
-  --transcript-file /mnt/user-data/outputs/ai-history-transcript.md
+python ./scripts/generate.py \
+  --script-file <WORKSPACE_DIR>/ai-history-script.json \
+  --output-file <OUTPUTS_DIR>/ai-history-podcast.mp3 \
+  --transcript-file <OUTPUTS_DIR>/ai-history-transcript.md
 ```
 
 This will generate:
@@ -164,7 +166,7 @@ The generated podcast follows the "Hello Deer" format:
 
 After generation:
 
-- Podcasts and transcripts are saved in `/mnt/user-data/outputs/`
+- Podcasts and transcripts are saved in `<OUTPUTS_DIR>/`
 - Share both the podcast MP3 and transcript MD with user using `present_files` tool
 - Provide brief description of the generation result (topic, duration, hosts)
 - Offer to regenerate if adjustments needed

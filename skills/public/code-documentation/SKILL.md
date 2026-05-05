@@ -5,6 +5,8 @@ description: Use this skill when the user requests to generate, create, or impro
 
 # Code Documentation Skill
 
+> Note: `<WORKSPACE_DIR>`, `<UPLOADS_DIR>`, and `<OUTPUTS_DIR>` are absolute paths to the agent's working directories; their concrete values are provided in the agent's system prompt.
+
 ## Overview
 
 This skill generates professional, comprehensive documentation for software projects, codebases, libraries, and APIs. It follows industry best practices from projects like React, Django, Stripe, and Kubernetes to produce documentation that is accurate, well-structured, and useful for both new contributors and experienced developers.
@@ -59,16 +61,16 @@ Use sandbox tools to explore the codebase:
 
 ```bash
 # Get directory structure
-ls /mnt/user-data/uploads/project-dir/
+ls <UPLOADS_DIR>/project-dir/
 
 # Read key files
-read_file /mnt/user-data/uploads/project-dir/package.json
-read_file /mnt/user-data/uploads/project-dir/pyproject.toml
+read_file <UPLOADS_DIR>/project-dir/package.json
+read_file <UPLOADS_DIR>/project-dir/pyproject.toml
 
 # Search for public API surfaces
-grep -r "export " /mnt/user-data/uploads/project-dir/src/
-grep -r "def " /mnt/user-data/uploads/project-dir/src/ --include="*.py"
-grep -r "func " /mnt/user-data/uploads/project-dir/ --include="*.go"
+grep -r "export " <UPLOADS_DIR>/project-dir/src/
+grep -r "def " <UPLOADS_DIR>/project-dir/src/ --include="*.py"
+grep -r "func " <UPLOADS_DIR>/project-dir/ --include="*.go"
 ```
 
 #### Step 1.3: Identify Documentation Scope
@@ -399,7 +401,7 @@ Ensure:
 
 After generation:
 
-- Save documentation files to `/mnt/user-data/outputs/`
+- Save documentation files to `<OUTPUTS_DIR>/`
 - For multi-file documentation, maintain the project directory structure
 - Present generated files to the user using the `present_files` tool
 - Offer to iterate on specific sections or adjust the level of detail

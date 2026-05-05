@@ -5,6 +5,8 @@ description: Use this skill when the user requests to review, analyze, critique,
 
 # Academic Paper Review Skill
 
+> Note: `<WORKSPACE_DIR>`, `<UPLOADS_DIR>`, and `<OUTPUTS_DIR>` are absolute paths to the agent's working directories; their concrete values are provided in the agent's system prompt.
+
 ## Overview
 
 This skill produces structured, peer-review-quality analyses of academic papers and research publications. It follows established academic review standards used by top-tier venues (NeurIPS, ICML, ACL, Nature, IEEE) to provide rigorous, constructive, and balanced assessments.
@@ -277,7 +279,7 @@ Before finalizing the review, verify:
 ## Output Format
 
 - Output the complete review in **Markdown** format
-- Save the review to `/mnt/user-data/outputs/review-{paper-topic}.md` when working in sandbox
+- Save the review to `<OUTPUTS_DIR>/review-{paper-topic}.md` when working in sandbox
 - Present the review to the user using the `present_files` tool
 
 ## Notes

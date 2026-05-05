@@ -48,10 +48,10 @@ This is commonly used in signup flows, admin dashboards, or when importing users
 ## Generation Command
 
 ```bash
-python /mnt/skills/public/podcast-generation/scripts/generate.py \
-  --script-file /mnt/user-data/workspace/tech-explainer-script.json \
-  --output-file /mnt/user-data/outputs/tech-explainer-podcast.mp3 \
-  --transcript-file /mnt/user-data/outputs/tech-explainer-transcript.md
+python ./scripts/generate.py \
+  --script-file <WORKSPACE_DIR>/tech-explainer-script.json \
+  --output-file <OUTPUTS_DIR>/tech-explainer-podcast.mp3 \
+  --transcript-file <OUTPUTS_DIR>/tech-explainer-transcript.md
 ```
 
 ## Tips for Technical Podcasts

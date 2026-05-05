@@ -5,6 +5,8 @@ description: Use this skill when the user requests to generate, create, or imagi
 
 # Video Generation Skill
 
+> Note: `<WORKSPACE_DIR>`, `<UPLOADS_DIR>`, and `<OUTPUTS_DIR>` are absolute paths to the agent's working directories; their concrete values are provided in the agent's system prompt.
+
 ## Overview
 
 This skill generates high-quality videos using structured prompts and a Python script. The workflow includes creating JSON-formatted prompts and executing video generation with optional reference image.
@@ -25,11 +27,11 @@ When a user requests video generation, identify:
 - Style preferences: Art style, mood, color palette
 - Technical specs: Aspect ratio, composition, lighting
 - Reference image: Any image to guide generation
-- You don't need to check the folder under `/mnt/user-data`
+- You don't need to check the workspace directory
 
 ### Step 2: Create Structured Prompt
 
-Generate a structured JSON file in `/mnt/user-data/workspace/` with naming pattern: `{descriptive-name}.json`
+Generate a structured JSON file in `<WORKSPACE_DIR>/` with naming pattern: `{descriptive-name}.json`
 
 ### Step 3: Create Reference Image (Optional when image-generation skill is available)
 
@@ -41,10 +43,10 @@ Generate reference image for the video generation.
 
 Call the Python script:
 ```bash
-python /mnt/skills/public/video-generation/scripts/generate.py \
-  --prompt-file /mnt/user-data/workspace/prompt-file.json \
+python ./scripts/generate.py \
+  --prompt-file <WORKSPACE_DIR>/prompt-file.json \
   --reference-images /path/to/ref1.jpg \
-  --output-file /mnt/user-data/outputs/generated-video.mp4 \
+  --output-file <OUTPUTS_DIR>/generated-video.mp4 \
   --aspect-ratio 16:9
 ```
 
@@ -114,10 +116,10 @@ Load the image-generation skill and generate a single reference image `narnia-fa
 
 Step 4: Use the generate.py script to generate the video
 ```bash
-python /mnt/skills/public/video-generation/scripts/generate.py \
-  --prompt-file /mnt/user-data/workspace/narnia-farewell-scene.json \
-  --reference-images /mnt/user-data/outputs/narnia-farewell-scene-01.jpg \
-  --output-file /mnt/user-data/outputs/narnia-farewell-scene-01.mp4 \
+python ./scripts/generate.py \
+  --prompt-file <WORKSPACE_DIR>/narnia-farewell-scene.json \
+  --reference-images <OUTPUTS_DIR>/narnia-farewell-scene-01.jpg \
+  --output-file <OUTPUTS_DIR>/narnia-farewell-scene-01.mp4 \
   --aspect-ratio 16:9
 ```
 > Do NOT read the python file, just call it with the parameters.
@@ -126,7 +128,7 @@ python /mnt/skills/public/video-generation/scripts/generate.py \
 
 After generation:
 
-- Videos are typically saved in `/mnt/user-data/outputs/`
+- Videos are typically saved in `<OUTPUTS_DIR>/`
 - Share generated videos (come first) with user as well as generated image if applicable, using `present_files` tool
 - Provide brief description of the generation result
 - Offer to iterate if adjustments needed

@@ -5,6 +5,8 @@ description: Use this skill when the user requests to generate, create, write, o
 
 # Newsletter Generation Skill
 
+> Note: `<OUTPUTS_DIR>` is an absolute path to the agent's outputs directory; its concrete value is provided in the agent's system prompt.
+
 ## Overview
 
 This skill generates professional, well-researched newsletters that combine curated content from multiple sources with original analysis and commentary. It follows modern newsletter best practices from publications like Morning Brew, The Hustle, TLDR, and Benedict Evans to produce content that is informative, engaging, and actionable.
@@ -326,7 +328,7 @@ Before finalizing, verify:
 
 After generation:
 
-- Save the newsletter to `/mnt/user-data/outputs/newsletter-{topic}-{date}.md`
+- Save the newsletter to `<OUTPUTS_DIR>/newsletter-{topic}-{date}.md`
 - Present the newsletter to the user using the `present_files` tool
 - Offer to adjust sections, tone, length, or focus areas
 - If the user wants HTML output, note that the Markdown can be converted using standard tools
