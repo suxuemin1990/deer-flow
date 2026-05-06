@@ -73,6 +73,7 @@ def _build_runtime_middlewares(
 ) -> list[AgentMiddleware]:
     """Build shared base middlewares for agent execution."""
     from deerflow.agents.middlewares.llm_error_handling_middleware import LLMErrorHandlingMiddleware
+    from deerflow.agents.middlewares.system_prompt_path_middleware import SystemPromptPathMiddleware
     from deerflow.agents.middlewares.thread_data_middleware import ThreadDataMiddleware
 
     middlewares: list[AgentMiddleware] = [
@@ -83,6 +84,11 @@ def _build_runtime_middlewares(
         from deerflow.agents.middlewares.uploads_middleware import UploadsMiddleware
 
         middlewares.insert(1, UploadsMiddleware())
+
+    # Substitute per-thread path placeholders ({workspace_path}/{uploads_path}/
+    # {outputs_path}) in the system message just before each model call.
+    # Must come after ThreadDataMiddleware (which populates `state.thread_data`).
+    middlewares.append(SystemPromptPathMiddleware())
 
     if include_dangling_tool_call_patch:
         from deerflow.agents.middlewares.dangling_tool_call_middleware import DanglingToolCallMiddleware

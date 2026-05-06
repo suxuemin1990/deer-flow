@@ -11,21 +11,9 @@ import logging
 from typing import Any
 
 from deerflow.subagents.config import SubagentConfig
+from deerflow.utils.prompt_format import SafeFormatDict
 
 logger = logging.getLogger(__name__)
-
-
-class _SafeFormatDict(dict):
-    """Format-mapping that leaves unknown placeholders untouched.
-
-    Lets us substitute path template variables (``{workspace_path}``,
-    ``{uploads_path}``, ``{outputs_path}``, ``{skills_path}``) into a
-    subagent's ``system_prompt`` without crashing on custom subagent
-    prompts that contain literal braces or other unrelated placeholders.
-    """
-
-    def __missing__(self, key: str) -> str:  # type: ignore[override]
-        return "{" + key + "}"
 
 
 def _resolve_system_prompt(
@@ -45,7 +33,7 @@ def _resolve_system_prompt(
         "skills_path": skills_path or "<skills not configured>",
     }
     try:
-        return config.system_prompt.format_map(_SafeFormatDict(values))
+        return config.system_prompt.format_map(SafeFormatDict(values))
     except (KeyError, IndexError, ValueError) as exc:
         logger.warning(
             "Failed to format subagent system_prompt for %s (%s); using raw prompt",

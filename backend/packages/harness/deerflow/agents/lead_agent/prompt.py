@@ -737,18 +737,22 @@ def apply_prompt_template(
     outputs_path: str | None = None,
     skills_path: str | None = None,
 ) -> str:
-    # Normalize per-thread paths with sensible fallbacks so the template renders
-    # safely when a thread isn't bound yet (e.g. agent construction time).
-    workspace_path = workspace_path or "<workspace not yet initialized>"
-    uploads_path = uploads_path or "<uploads not yet initialized>"
-    outputs_path = outputs_path or "<outputs not yet initialized>"
+    from deerflow.utils.prompt_format import SafeFormatDict
+
+    # Per-thread paths are only known at runtime. When the caller doesn't
+    # supply them (agent construction time), we leave raw `{workspace_path}`
+    # / `{uploads_path}` / `{outputs_path}` placeholders in the rendered
+    # prompt; ``SystemPromptPathMiddleware`` substitutes them just before
+    # each model call using ``state["thread_data"]``.
+    workspace_for_subsections = workspace_path if workspace_path is not None else "{workspace_path}"
+    outputs_for_subsections = outputs_path if outputs_path is not None else "{outputs_path}"
 
     # Get memory context
     memory_context = _get_memory_context(agent_name)
 
     # Include subagent section only if enabled (from runtime parameter)
     n = max_concurrent_subagents
-    subagent_section = _build_subagent_section(n, workspace_path) if subagent_enabled else ""
+    subagent_section = _build_subagent_section(n, workspace_for_subsections) if subagent_enabled else ""
 
     # Add subagent reminder to critical_reminders if enabled
     subagent_reminder = (
@@ -775,23 +779,33 @@ def apply_prompt_template(
     deferred_tools_section = get_deferred_tools_prompt_section()
 
     # Build ACP agent section only if ACP agents are configured
-    acp_section = _build_acp_section(outputs_path)
+    acp_section = _build_acp_section(outputs_for_subsections)
 
-    # Format the prompt with dynamic skills and memory
-    prompt = SYSTEM_PROMPT_TEMPLATE.format(
-        agent_name=agent_name or "DeerFlow 2.0",
-        soul=get_agent_soul(agent_name),
-        skills_section=skills_section,
-        deferred_tools_section=deferred_tools_section,
-        memory_context=memory_context,
-        subagent_section=subagent_section,
-        subagent_reminder=subagent_reminder,
-        subagent_thinking=subagent_thinking,
-        acp_section=acp_section,
-        workspace_path=workspace_path,
-        uploads_path=uploads_path,
-        outputs_path=outputs_path,
-    )
+    # Format the prompt with dynamic skills and memory.
+    # Per-thread paths intentionally absent from the values dict — SafeFormatDict
+    # leaves their `{key}` placeholders in place for the runtime middleware.
+    values: dict[str, str] = {
+        "agent_name": agent_name or "DeerFlow 2.0",
+        "soul": get_agent_soul(agent_name),
+        "skills_section": skills_section,
+        "deferred_tools_section": deferred_tools_section,
+        "memory_context": memory_context,
+        "subagent_section": subagent_section,
+        "subagent_reminder": subagent_reminder,
+        "subagent_thinking": subagent_thinking,
+        "acp_section": acp_section,
+    }
+    if workspace_path is not None:
+        values["workspace_path"] = workspace_path
+    if uploads_path is not None:
+        values["uploads_path"] = uploads_path
+    if outputs_path is not None:
+        values["outputs_path"] = outputs_path
+    # skills_path is a thread-independent global; the runtime middleware does
+    # NOT substitute it, so fall back to a sentinel so no raw placeholder leaks.
+    values["skills_path"] = skills_path or "<skills not configured>"
+
+    prompt = SYSTEM_PROMPT_TEMPLATE.format_map(SafeFormatDict(values))
 
     workflow_catalog = _resolve_workflow_catalog()
     if workflow_catalog:
