@@ -36,6 +36,21 @@ def resolve_thread_artifact_path(thread_id: str, path: str) -> Path:
         logger.debug("artifact url legacy prefix stripped: %s", stripped)
 
     user_data = get_paths().sandbox_user_data_dir(thread_id).resolve()
+
+    # Absolute host path form: ``present_files`` stores absolute host paths in
+    # ``thread.values.artifacts``; the frontend concatenates them onto the
+    # endpoint URL, producing paths like ``data/.../user-data/outputs/foo``
+    # (the leading ``/`` was consumed as the URL separator). If the path
+    # re-prepended with ``/`` resolves to a location inside this thread's
+    # user_data dir, treat it as already absolute.
+    abs_candidate = Path("/" + stripped).resolve()
+    try:
+        abs_candidate.relative_to(user_data)
+    except ValueError:
+        pass
+    else:
+        return abs_candidate
+
     target = (user_data / stripped).resolve()
     try:
         target.relative_to(user_data)

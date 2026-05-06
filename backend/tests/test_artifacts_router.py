@@ -158,6 +158,41 @@ def test_get_artifact_legacy_mnt_url_still_resolves(tmp_path, monkeypatch) -> No
     assert response.text == "legacy"
 
 
+def test_get_artifact_absolute_host_path_url_resolves(tmp_path, monkeypatch) -> None:
+    """An absolute host path under user-data (as stored by present_files) must resolve.
+
+    ``present_files`` stores absolute host paths in ``thread.values.artifacts``;
+    the frontend concatenates that path onto ``/api/threads/{tid}/artifacts``,
+    producing URLs like ``.../artifacts/<host_user_data_dir>/outputs/foo``.
+    The router must recognize and serve those.
+    """
+    from app.gateway import path_utils
+
+    user_data = tmp_path / "threads" / "thread-1" / "user-data"
+    (user_data / "outputs").mkdir(parents=True)
+    artifact_path = user_data / "outputs" / "hello.txt"
+    artifact_path.write_text("hello world", encoding="utf-8")
+
+    paths_stub = type(
+        "P",
+        (),
+        {"sandbox_user_data_dir": staticmethod(lambda _tid: user_data)},
+    )()
+    monkeypatch.setattr(path_utils, "get_paths", lambda: paths_stub)
+
+    app = FastAPI()
+    app.include_router(artifacts_router.router)
+
+    # Frontend URL: base + "/api/threads/{tid}/artifacts" + abs_path (which starts with "/")
+    # → "/api/threads/{tid}/artifacts" + "/...host.../outputs/hello.txt"
+    abs_url = f"/api/threads/thread-1/artifacts{artifact_path}"
+    with TestClient(app) as client:
+        response = client.get(abs_url)
+
+    assert response.status_code == 200
+    assert response.text == "hello world"
+
+
 def test_get_artifact_short_url_rejects_traversal(tmp_path, monkeypatch) -> None:
     from app.gateway import path_utils
 
