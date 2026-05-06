@@ -295,10 +295,12 @@ def _load_and_cache_app_config(config_path: str | None = None) -> AppConfig:
     _app_config_mtime = _get_config_mtime(resolved_path)
     _app_config_is_custom = False
     warn_on_legacy_sandbox_use(_app_config)
+    warn_on_legacy_skills_container_path(_app_config)
     return _app_config
 
 
 _warned_legacy_sandbox_use: set[str] = set()
+_warned_legacy_skills_container_path: set[str] = set()
 
 
 def warn_on_legacy_sandbox_use(config: AppConfig) -> None:
@@ -324,6 +326,35 @@ def warn_on_legacy_sandbox_use(config: AppConfig) -> None:
         "removed. The field will be ignored. Remove it from config.yaml to "
         "silence this warning.",
         legacy_use,
+    )
+
+
+def warn_on_legacy_skills_container_path(config: AppConfig) -> None:
+    """Log a one-time deprecation warning if legacy skills.container_path is present.
+
+    Sandbox isolation has been removed; the agent now sees the real host
+    skills directory directly, so ``skills.container_path`` (the in-sandbox
+    mount point) is no longer meaningful. The field is silently accepted via
+    ``extra="allow"`` for backwards-compat but has no effect. Each distinct
+    legacy value warns at most once per process.
+    """
+    skills = getattr(config, "skills", None)
+    if skills is None:
+        return
+    extra = getattr(skills, "__pydantic_extra__", None) or {}
+    legacy_value = extra.get("container_path")
+    if not legacy_value:
+        return
+    key = str(legacy_value)
+    if key in _warned_legacy_skills_container_path:
+        return
+    _warned_legacy_skills_container_path.add(key)
+    logger.warning(
+        "skills.container_path=%s is no longer supported; sandbox isolation "
+        "has been removed and the agent reads skills directly from the host "
+        "path under skills.path. The field will be ignored. Remove it from "
+        "config.yaml to silence this warning.",
+        legacy_value,
     )
 
 

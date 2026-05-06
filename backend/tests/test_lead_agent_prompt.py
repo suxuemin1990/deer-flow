@@ -10,7 +10,7 @@ from deerflow.skills.types import Skill
 def test_apply_prompt_template_includes_relative_path_guidance(monkeypatch):
     config = SimpleNamespace(
         sandbox=SimpleNamespace(mounts=[]),
-        skills=SimpleNamespace(container_path="/mnt/skills"),
+        skills=SimpleNamespace(),
     )
     monkeypatch.setattr("deerflow.config.get_app_config", lambda: config)
     monkeypatch.setattr(prompt_module, "_get_enabled_skills", lambda: [])

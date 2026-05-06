@@ -1,6 +1,6 @@
 from pathlib import Path
 
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, ConfigDict, Field
 
 
 def _default_repo_root() -> Path:
@@ -9,12 +9,20 @@ def _default_repo_root() -> Path:
 
 
 class SkillsConfig(BaseModel):
-    """Configuration for skills system"""
+    """Configuration for skills system.
+
+    Legacy fields (``container_path``) are silently accepted via
+    ``extra="allow"`` so old config.yaml files keep loading; a startup
+    warning is emitted when ``container_path`` is non-empty (see
+    ``app_config.warn_on_legacy_skills_container_path``).
+    """
 
     path: str | None = Field(
         default=None,
         description="Path to skills directory. If not specified, defaults to ../skills relative to backend directory",
     )
+
+    model_config = ConfigDict(extra="allow")
 
     def get_skills_path(self) -> Path:
         """

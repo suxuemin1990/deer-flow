@@ -60,7 +60,7 @@ def test_get_skills_prompt_section_includes_self_evolution_rules(monkeypatch):
     monkeypatch.setattr(
         "deerflow.config.get_app_config",
         lambda: SimpleNamespace(
-            skills=SimpleNamespace(container_path="/mnt/skills"),
+            skills=SimpleNamespace(),
             skill_evolution=SimpleNamespace(enabled=True),
         ),
     )
@@ -74,7 +74,7 @@ def test_get_skills_prompt_section_includes_self_evolution_rules_without_skills(
     monkeypatch.setattr(
         "deerflow.config.get_app_config",
         lambda: SimpleNamespace(
-            skills=SimpleNamespace(container_path="/mnt/skills"),
+            skills=SimpleNamespace(),
             skill_evolution=SimpleNamespace(enabled=True),
         ),
     )
@@ -87,7 +87,7 @@ def test_get_skills_prompt_section_cache_respects_skill_evolution_toggle(monkeyp
     skills = [_make_skill("skill1")]
     monkeypatch.setattr("deerflow.agents.lead_agent.prompt._get_enabled_skills", lambda: skills)
     config = SimpleNamespace(
-        skills=SimpleNamespace(container_path="/mnt/skills"),
+        skills=SimpleNamespace(),
         skill_evolution=SimpleNamespace(enabled=True),
     )
     monkeypatch.setattr("deerflow.config.get_app_config", lambda: config)

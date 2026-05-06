@@ -41,7 +41,7 @@ def test_custom_skills_router_lifecycle(monkeypatch, tmp_path):
     custom_dir.mkdir(parents=True, exist_ok=True)
     (custom_dir / "SKILL.md").write_text(_skill_content("demo-skill"), encoding="utf-8")
     config = SimpleNamespace(
-        skills=SimpleNamespace(get_skills_path=lambda: skills_root, container_path="/mnt/skills"),
+        skills=SimpleNamespace(get_skills_path=lambda: skills_root),
         skill_evolution=SimpleNamespace(enabled=True, moderation_model_name=None),
     )
     monkeypatch.setattr("deerflow.config.get_app_config", lambda: config)
@@ -91,7 +91,7 @@ def test_custom_skill_rollback_blocked_by_scanner(monkeypatch, tmp_path):
     edited_content = _skill_content("demo-skill", "Edited skill")
     (custom_dir / "SKILL.md").write_text(edited_content, encoding="utf-8")
     config = SimpleNamespace(
-        skills=SimpleNamespace(get_skills_path=lambda: skills_root, container_path="/mnt/skills"),
+        skills=SimpleNamespace(get_skills_path=lambda: skills_root),
         skill_evolution=SimpleNamespace(enabled=True, moderation_model_name=None),
     )
     monkeypatch.setattr("deerflow.config.get_app_config", lambda: config)
@@ -133,7 +133,7 @@ def test_custom_skill_delete_preserves_history_and_allows_restore(monkeypatch, t
     original_content = _skill_content("demo-skill")
     (custom_dir / "SKILL.md").write_text(original_content, encoding="utf-8")
     config = SimpleNamespace(
-        skills=SimpleNamespace(get_skills_path=lambda: skills_root, container_path="/mnt/skills"),
+        skills=SimpleNamespace(get_skills_path=lambda: skills_root),
         skill_evolution=SimpleNamespace(enabled=True, moderation_model_name=None),
     )
     monkeypatch.setattr("deerflow.config.get_app_config", lambda: config)
@@ -171,7 +171,7 @@ def test_custom_skill_delete_continues_when_history_write_is_readonly(monkeypatc
     custom_dir.mkdir(parents=True, exist_ok=True)
     (custom_dir / "SKILL.md").write_text(_skill_content("demo-skill"), encoding="utf-8")
     config = SimpleNamespace(
-        skills=SimpleNamespace(get_skills_path=lambda: skills_root, container_path="/mnt/skills"),
+        skills=SimpleNamespace(get_skills_path=lambda: skills_root),
         skill_evolution=SimpleNamespace(enabled=True, moderation_model_name=None),
     )
     monkeypatch.setattr("deerflow.config.get_app_config", lambda: config)
@@ -205,7 +205,7 @@ def test_custom_skill_delete_fails_when_skill_dir_removal_fails(monkeypatch, tmp
     custom_dir.mkdir(parents=True, exist_ok=True)
     (custom_dir / "SKILL.md").write_text(_skill_content("demo-skill"), encoding="utf-8")
     config = SimpleNamespace(
-        skills=SimpleNamespace(get_skills_path=lambda: skills_root, container_path="/mnt/skills"),
+        skills=SimpleNamespace(get_skills_path=lambda: skills_root),
         skill_evolution=SimpleNamespace(enabled=True, moderation_model_name=None),
     )
     monkeypatch.setattr("deerflow.config.get_app_config", lambda: config)

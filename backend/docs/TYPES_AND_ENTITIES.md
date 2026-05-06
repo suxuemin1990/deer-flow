@@ -151,8 +151,6 @@ class DisconnectMode(StrEnum):  # cancel | continue_   SSE 客户端断开后是
 | `relative_path / category` | 相对路径 + `public` 或 `custom` |
 | `enabled` | 是否启用 |
 
-方法 `get_container_path` 返回相对于 skills 根目录的路径。
-
 > 代码中**没有** `SkillPack` 类型,字面意义的"技能包"就是 `Skill` + 它所在目录里的资源文件。
 
 ### 2.7 MCP — `config/extensions_config.py`
