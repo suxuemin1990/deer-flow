@@ -1510,9 +1510,38 @@ class TestArtifacts:
                 with pytest.raises(FileNotFoundError):
                     client.get_artifact("t1", "mnt/user-data/outputs/nope.txt")
 
-    def test_get_artifact_bad_prefix(self, client):
-        with pytest.raises(ValueError, match="must start with"):
-            client.get_artifact("t1", "bad/path/file.txt")
+    def test_get_artifact_absolute_host_path(self, client):
+        """Absolute host paths under user-data resolve correctly.
+
+        ``present_files`` stores absolute host paths in
+        ``thread.values.artifacts``, and SDK consumers should be able to feed
+        those straight back into ``get_artifact``.
+        """
+        with tempfile.TemporaryDirectory() as tmp:
+            paths = Paths(base_dir=tmp)
+            outputs = paths.sandbox_outputs_dir("t1")
+            outputs.mkdir(parents=True)
+            (outputs / "result.txt").write_text("artifact content")
+            abs_path = str(outputs / "result.txt")
+
+            with patch("deerflow.client.get_paths", return_value=paths):
+                content, mime = client.get_artifact("t1", abs_path)
+
+            assert content == b"artifact content"
+            assert "text" in mime
+
+    def test_get_artifact_short_form(self, client):
+        """The short form (``outputs/file.txt``) resolves under user-data."""
+        with tempfile.TemporaryDirectory() as tmp:
+            paths = Paths(base_dir=tmp)
+            outputs = paths.sandbox_outputs_dir("t1")
+            outputs.mkdir(parents=True)
+            (outputs / "result.txt").write_text("short form")
+
+            with patch("deerflow.client.get_paths", return_value=paths):
+                content, _mime = client.get_artifact("t1", "outputs/result.txt")
+
+            assert content == b"short form"
 
     def test_get_artifact_path_traversal(self, client):
         with tempfile.TemporaryDirectory() as tmp:
@@ -2983,26 +3012,35 @@ class TestUploadDuplicateFilenames:
 
 
 class TestBugArtifactPrefixMatchTooLoose:
-    """Regression: get_artifact must reject paths like ``mnt/user-data-evil/...``.
+    """Regression: get_artifact must not let path-segment confusion escape user-data.
 
     Previously ``startswith("mnt/user-data")`` matched ``"mnt/user-data-evil"``
-    because it was a string prefix, not a path-segment check.
+    as a string prefix, not a path-segment boundary. The current resolver
+    accepts the short / absolute / legacy forms and always confines results
+    to the thread's user-data dir, so confused inputs simply land at
+    non-existent paths inside user-data — not anywhere outside it.
     """
 
-    def test_non_canonical_prefix_rejected(self, client):
-        """Paths that share a string prefix but differ at segment boundary are rejected."""
-        with pytest.raises(ValueError, match="must start with"):
-            client.get_artifact("t1", "mnt/user-data-evil/secret.txt")
-
-    def test_exact_prefix_without_subpath_accepted(self, client):
-        """Bare 'mnt/user-data' is accepted (will later fail as directory, not at prefix)."""
+    def test_confused_segment_stays_under_user_data(self, client):
+        """``mnt/user-data-evil/...`` resolves to a non-existent location
+        under ``<user-data>/mnt/user-data-evil/...``, never outside."""
         with tempfile.TemporaryDirectory() as tmp:
             paths = Paths(base_dir=tmp)
             paths.sandbox_user_data_dir("t1").mkdir(parents=True)
 
             with patch("deerflow.client.get_paths", return_value=paths):
-                # Accepted at prefix check, but fails because it's a directory.
-                with pytest.raises(ValueError, match="not a file"):
+                with pytest.raises(FileNotFoundError):
+                    client.get_artifact("t1", "mnt/user-data-evil/secret.txt")
+
+    def test_bare_legacy_prefix_is_a_directory_not_a_file(self, client):
+        """``mnt/user-data`` (no trailing slash, no subpath) resolves to a
+        non-existent path under user-data; reading raises FileNotFoundError."""
+        with tempfile.TemporaryDirectory() as tmp:
+            paths = Paths(base_dir=tmp)
+            paths.sandbox_user_data_dir("t1").mkdir(parents=True)
+
+            with patch("deerflow.client.get_paths", return_value=paths):
+                with pytest.raises(FileNotFoundError):
                     client.get_artifact("t1", "mnt/user-data")
 
 

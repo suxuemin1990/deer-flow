@@ -1174,35 +1174,47 @@ class DeerFlowClient:
 
         Args:
             thread_id: Thread ID.
-            path: Virtual path (e.g. "mnt/user-data/outputs/file.txt").
+            path: Artifact path. Accepted forms (all resolve to the same file
+                under the thread's user-data directory):
+
+                - Short form: ``"outputs/file.txt"`` / ``"uploads/file.txt"``
+                - Absolute host path: ``"/abs/.../user-data/outputs/file.txt"``
+                  (this is what ``present_files`` stores in
+                  ``thread.values.artifacts``)
+                - Legacy virtual form: ``"mnt/user-data/outputs/file.txt"``
+                  (kept working for backward compatibility)
 
         Returns:
             Tuple of (file_bytes, mime_type).
 
         Raises:
             FileNotFoundError: If the artifact does not exist.
-            ValueError: If the path is invalid.
+            PathTraversalError: If the path escapes the thread's user-data dir.
+            ValueError: If the path is otherwise invalid.
         """
+        from deerflow.uploads.manager import PathTraversalError
+
+        base = get_paths().sandbox_user_data_dir(thread_id).resolve()
+        stripped = path.lstrip("/")
+        legacy_prefix = "mnt/user-data/"
+        if stripped.startswith(legacy_prefix):
+            stripped = stripped[len(legacy_prefix) :]
+
+        # Absolute-host-path form: re-prepend "/" and check whether it lands
+        # inside this thread's user-data directory.
+        abs_candidate = Path("/" + stripped).resolve()
         try:
-            stripped = path.lstrip("/")
-            prefix = "mnt/user-data"
-            if stripped != prefix and not stripped.startswith(prefix + "/"):
-                raise ValueError(f"Path must start with /{prefix}")
-            relative = stripped[len(prefix) :].lstrip("/")
-            base = get_paths().sandbox_user_data_dir(thread_id).resolve()
-            actual = (base / relative).resolve()
-            try:
-                actual.relative_to(base)
-            except ValueError:
-                from deerflow.uploads.manager import PathTraversalError
+            abs_candidate.relative_to(base)
+        except ValueError:
+            actual = (base / stripped).resolve()
+        else:
+            actual = abs_candidate
 
-                raise PathTraversalError("Path traversal detected") from None
-        except ValueError as exc:
-            if "traversal" in str(exc):
-                from deerflow.uploads.manager import PathTraversalError
+        try:
+            actual.relative_to(base)
+        except ValueError:
+            raise PathTraversalError("Path traversal detected") from None
 
-                raise PathTraversalError("Path traversal detected") from exc
-            raise
         if not actual.exists():
             raise FileNotFoundError(f"Artifact not found: {path}")
         if not actual.is_file():

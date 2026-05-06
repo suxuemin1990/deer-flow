@@ -110,7 +110,9 @@ function MessageImage({
     return <img className={imgClassName} src={src} alt={alt} {...props} />;
   }
 
-  const url = src.startsWith("/mnt/") ? resolveArtifactURL(src, threadId) : src;
+  // Rewrite both legacy /mnt/user-data/... and new absolute host /<...>/user-data/...
+  // paths produced by the agent. The /user-data/ substring is the stable marker.
+  const url = src.includes("/user-data/") ? resolveArtifactURL(src, threadId) : src;
 
   return (
     <a href={url} target="_blank" rel="noopener noreferrer">
@@ -140,7 +142,7 @@ function MessageContent_({
         <MessageImage {...props} threadId={threadId} maxWidth="90%" />
       ),
       a: ({ href, ...props }: AnchorHTMLAttributes<HTMLAnchorElement>) => {
-        if (href?.startsWith("/mnt/")) {
+        if (href?.includes("/user-data/")) {
           const url = resolveArtifactURL(href, threadId);
           return (
             <a
