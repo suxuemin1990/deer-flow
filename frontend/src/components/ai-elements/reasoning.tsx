@@ -6,10 +6,23 @@ import {
   CollapsibleContent,
   CollapsibleTrigger,
 } from "@/components/ui/collapsible";
+import { resolveArtifactURL } from "@/core/artifacts/utils";
 import { cn } from "@/lib/utils";
 import { BrainIcon, ChevronDownIcon } from "lucide-react";
-import type { ComponentProps, ReactNode } from "react";
-import { createContext, memo, useContext, useEffect, useState } from "react";
+import type {
+  AnchorHTMLAttributes,
+  ComponentProps,
+  ImgHTMLAttributes,
+  ReactNode,
+} from "react";
+import {
+  createContext,
+  memo,
+  useContext,
+  useEffect,
+  useMemo,
+  useState,
+} from "react";
 import { Streamdown } from "streamdown";
 import { reasoningPlugins } from "@/core/streamdown/plugins";
 import { Shimmer } from "./shimmer";
@@ -166,21 +179,59 @@ export type ReasoningContentProps = ComponentProps<
   typeof CollapsibleContent
 > & {
   children: string;
+  /** Optional thread id used to resolve in-content artifact URLs. When
+   * provided, ``<img src>`` and ``<a href>`` values that point under
+   * ``/user-data/`` are rewritten to the backend artifacts endpoint. */
+  threadId?: string;
 };
 
+function maybeResolveArtifactPath(
+  url: string | undefined,
+  threadId: string | undefined,
+): string | undefined {
+  if (!url || !threadId) return url;
+  if (url.includes("/user-data/")) {
+    return resolveArtifactURL(url, threadId);
+  }
+  return url;
+}
+
 export const ReasoningContent = memo(
-  ({ className, children, ...props }: ReasoningContentProps) => (
-    <CollapsibleContent
-      className={cn(
-        "mt-4 text-sm",
-        "data-[state=closed]:fade-out-0 data-[state=closed]:slide-out-to-top-2 data-[state=open]:slide-in-from-top-2 text-muted-foreground data-[state=closed]:animate-out data-[state=open]:animate-in outline-none",
-        className,
-      )}
-      {...props}
-    >
-      <Streamdown {...reasoningPlugins}>{children}</Streamdown>
-    </CollapsibleContent>
-  ),
+  ({ className, children, threadId, ...props }: ReasoningContentProps) => {
+    const components = useMemo(
+      () => ({
+        // Replace Streamdown's default image renderer (which wraps the
+        // <img> in a hover-overlay <div>) with a plain <img>. The
+        // wrapper div breaks HTML nesting rules when the image appears
+        // inline inside a <p>, producing a React hydration warning.
+        img: ({ src, alt, ...rest }: ImgHTMLAttributes<HTMLImageElement>) => {
+          const resolved = typeof src === "string"
+            ? maybeResolveArtifactPath(src, threadId)
+            : src;
+          return <img src={resolved} alt={alt} {...rest} />;
+        },
+        a: ({ href, ...rest }: AnchorHTMLAttributes<HTMLAnchorElement>) => {
+          const resolved = maybeResolveArtifactPath(href, threadId);
+          return <a href={resolved} {...rest} />;
+        },
+      }),
+      [threadId],
+    );
+    return (
+      <CollapsibleContent
+        className={cn(
+          "mt-4 text-sm",
+          "data-[state=closed]:fade-out-0 data-[state=closed]:slide-out-to-top-2 data-[state=open]:slide-in-from-top-2 text-muted-foreground data-[state=closed]:animate-out data-[state=open]:animate-in outline-none",
+          className,
+        )}
+        {...props}
+      >
+        <Streamdown {...reasoningPlugins} components={components}>
+          {children}
+        </Streamdown>
+      </CollapsibleContent>
+    );
+  },
 );
 
 Reasoning.displayName = "Reasoning";

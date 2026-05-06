@@ -234,7 +234,7 @@ function MessageContent_({
       <AIElementMessageContent className={className}>
         <Reasoning isStreaming={isLoading}>
           <ReasoningTrigger />
-          <ReasoningContent>{reasoningContent}</ReasoningContent>
+          <ReasoningContent threadId={threadId}>{reasoningContent}</ReasoningContent>
         </Reasoning>
         <MessageTokenUsage
           enabled={tokenUsageEnabled}

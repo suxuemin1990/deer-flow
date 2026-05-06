@@ -183,6 +183,7 @@ export function MessageList({
                     key={"thinking-group-" + message.id}
                     messages={[message]}
                     isLoading={thread.isLoading}
+                    threadId={threadId}
                   />,
                 );
               }
@@ -251,6 +252,7 @@ export function MessageList({
               <MessageGroup
                 messages={group.messages}
                 isLoading={thread.isLoading}
+                threadId={threadId}
               />
               {workflowLinks.map(({ id, link }) => (
                 <div key={`wf-link-${id}`} className="mt-3">
