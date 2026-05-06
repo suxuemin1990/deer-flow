@@ -2,9 +2,9 @@
 
 Date executed: 2026-05-06
 Checklist: `docs/superpowers/smoke/2026-05-05-remove-sandbox-isolation-smoke.md`
-Diff window: `878be2b6..8c2b8506` (30 commits — adds `8c2b8506` channel-adapter migration on top of prior run)
-Executor: subagent (Crush)
-Stack: gateway @ `127.0.0.1:8001` (uvicorn, single-process); frontend & langgraph not started — no live UI / LLM run available in this environment.
+Diff window: `878be2b6..fe29f2f6` (32 commits — adds `8c2b8506` channel-adapter migration and `fe29f2f6` F3 fix on top of prior run)
+Executor: subagent (Crush) + live browser smoke (operator)
+Stack: gateway @ `127.0.0.1:8001` (uvicorn) + frontend @ `127.0.0.1:3000` (Next.js dev) — full stack live; LLM-bound items S1/S2/S3/S6/S16 driven through the browser via `web_exec_js`.
 
 Mode key: **live** = HTTP probe / boot against running gateway; **source** = source-inspection per the checklist's per-item fallback note; **deferred** = strictly requires live LLM/UI and stack-not-available.
 
@@ -377,32 +377,55 @@ Two comment-only residues persist and are intentional — both documented in S11
 
 ---
 
+## Live LLM-driven re-run (operator browser smoke)
+
+After the subagent completed source-only verification, the operator brought up frontend + gateway and drove S1/S2/S3/S6/S16 via the actual chat UI (model: `Doubao-Seed-2.0`).
+
+| Item | Status | Thread | Evidence |
+|---|---|---|---|
+| S1 | ✓ live | `87bbf990-...` | `pwd` returned `/data/src/deer-flow/backend/.deer-flow/threads/87bbf990-.../user-data/workspace`; no `/mnt/user-data/`; `ls -la` showed empty workspace. |
+| S2 | **first ⚠️ → fixed → ✓ live** | `e72808c4-...` (failed) → `7ba53c3f-...` (passed) | First run: LLM quoted literal `<workspace not yet initialized>` placeholder strings — exposed **F3** (lead-agent system prompt was rendered at construction time with no per-thread paths). Fix `fe29f2f6` adds `SystemPromptPathMiddleware` that substitutes `{workspace_path}`/`{uploads_path}`/`{outputs_path}` via `wrap_model_call` from `state["thread_data"]`. Re-run: LLM quoted real host paths verbatim (`/data/src/deer-flow/backend/.deer-flow/threads/7ba53c3f-.../user-data/{uploads,workspace,outputs}`). |
+| S3 | ✓ live | `74f7094a-...` | Uploaded `note-smoke.txt` containing `hello-smoke-7c4f9a` via `web_exec_js` `DataTransfer` injection. Agent invoked `read_file` with absolute host path `/data/src/deer-flow/backend/.deer-flow/threads/74f7094a-.../user-data/uploads/note-smoke.txt` and quoted the random token verbatim. Thread state inspection (`POST /api/threads/<tid>/state`) confirmed the uploaded-files block embeds host paths only. |
+| S4 | ✓ live | `74f7094a-...` (S3 thread) | Both `curl /api/threads/<tid>/artifacts/uploads/note-smoke.txt` and `/api/threads/<tid>/artifacts/mnt/user-data/uploads/note-smoke.txt` → 200 + identical 19-byte body `hello-smoke-7c4f9a` (validates S5 too). |
+| S6 | ✓ live | `052147da-...` | Agent ran `bash` with `cwd=workspace` → `echo smoke-S6-9d2f1a > ../outputs/smoke.txt && cat ../outputs/smoke.txt && readlink -f ../outputs/smoke.txt`, captured the absolute path, called `present_files` with it. Frontend rendered the file as an attachment card; `curl /api/threads/052147da-.../artifacts/outputs/smoke.txt` → 200 with body `smoke-S6-9d2f1a`. |
+| S16 | ✓ live | `0a4b8f38-...` | Asked agent to `present_files("/etc/hostname")`. Tool returned the rejection: `"Error: path /etc/hostname is outside the outputs directory /data/src/deer-flow/backend/.deer-flow/threads/0a4b8f38-.../user-data/outputs"`. No file leaked to UI; the `etc/hostname` artifact-URL probe → 404 from path-traversal guard. |
+
+### F3 detail
+
+- **Discovered** during S2 first run.
+- **Root cause**: `apply_prompt_template` was invoked at agent construction time in `lead_agent/agent.py:376,390` with `workspace_path=None` etc. The prior implementation substituted sentinel strings `<workspace not yet initialized>` as fallback. Subagents already had a runtime resolver (`subagents/prompt_resolver.py`) but the lead agent did not.
+- **Fix** (`fe29f2f6` — "fix(prompt): substitute per-thread paths at model-call time"):
+  - `deerflow/utils/prompt_format.py` (NEW): public `SafeFormatDict` (extracted from `subagents/prompt_resolver.py`'s private copy).
+  - `apply_prompt_template`: switched to `format_map(SafeFormatDict(values))`; per-thread keys now omitted from values when caller passes None, leaving raw `{workspace_path}` placeholders in the rendered string. `{skills_path}` still pre-substituted (thread-independent).
+  - `agents/middlewares/system_prompt_path_middleware.py` (NEW): `SystemPromptPathMiddleware.wrap_model_call` / `awrap_model_call` substitute the leftover placeholders just-in-time using `request.state["thread_data"]`. Idempotent: skips when no placeholders, no `system_message`, or no thread paths populated.
+  - Inserted into `_build_runtime_middlewares` after `ThreadDataMiddleware`/`UploadsMiddleware`.
+  - Tests: 8 new unit tests in `tests/test_system_prompt_path_middleware.py` (sync + async, idempotency, partial-key, unknown placeholder preservation); updated `test_template_default_paths_when_none_provided` to expect raw placeholders instead of sentinels; added `test_template_keeps_per_thread_placeholders_with_subagent_section`.
+  - Full backend pytest after fix: **1942 passed, 3 skipped** (was 1933 + 9 new).
+
 ## Skipped / Blocked
 
 | Item | Status | Reason |
 |---|---|---|
-| S1 | 🔍 | Live LLM stack (langgraph + frontend) not started; covered by `tests/test_local_sandbox_cwd.py` + `test_bash_tool_cwd.py`. |
-| S2 | 🔍 | Live LLM run deferred; lead-agent prompt source-inspected + `test_lead_agent_prompt.py` green. |
-| S3 | 🔍 | Live LLM run deferred; upload write-side verified live in S4. |
-| S6 | 🔍 | Live LLM run deferred; `test_present_file_tool_core_logic.py` green. |
-| S7 | 🔍 | Live LLM run deferred; subagent prompts source-inspected. |
-| S8 | 🔍 | Live LLM run deferred; `test_middleware_chain_no_sandbox.py` + `test_bash_tool_routing.py` green; SandboxMiddleware grep in production = zero. |
-| S12 | 🔍 | Live skill run deferred; SKILL.md grep clean. |
-| S15 | ⏭ | No pre-refactor thread fixture available — checklist explicitly allows fallback to S5. |
-| S16 | 🔍 | Live LLM tool-call deferred; `test_present_files_rejects_paths_outside_outputs` green. |
+| S7 | 🔍 | Live subagent dispatch deferred; subagent prompt resolver covered by `test_subagent_prompt_paths.py` + `test_subagent_prompt_security.py`. |
+| S8 | 🔍 | Live bash subagent deferred; `test_middleware_chain_no_sandbox.py` + `test_bash_tool_routing.py` green; SandboxMiddleware grep in production = zero. |
+| S12 | 🔍 | Live skill run deferred; SKILL.md grep clean (zero `/mnt/*` literals in `skills/public/`). |
+| S15 | ⏭ | No pre-refactor thread fixture available — checklist explicitly allows fallback to S5 (legacy URL shape verified live). |
 
 ## Summary
 
-- ✓ live: **8** (S4, S5, S9, S10, S11, S14, S17, S18) + A1 = **9 ✓ ticks** (8 + 1 adversarial)
-  - S11 promoted to ✓ in this re-run (was ⚠️ — F1 closed by commit `8c2b8506`).
-- 🔍 source-pass: **8** (S1, S2, S3, S6, S7, S8, S12, S16) — automation-covered; live LLM cross-check deferred for stack-not-available reason.
-- ⏭ skipped (with explicit fallback): **1** (S15 → S5).
+- ✓ live: **13** (S1, S2, S3, S4, S5, S6, S9, S10, S11, S14, S16, S17, S18) + A1 = **14 ✓ ticks**
+  - S2 promoted live after F3 fix (`fe29f2f6`).
+  - S11 promoted to ✓ in prior re-run (F1 closed by `8c2b8506`).
+  - S1/S3/S6/S16 promoted from 🔍 to ✓ via operator browser smoke.
+- 🔍 source-pass: **3** (S7, S8, S12) — automation-covered; live LLM cross-check deferred (low-risk: subagent dispatch / bash subagent / skill run all have green unit tests on the same code paths).
+- ⏭ skipped (with explicit fallback): **1** (S15 → S5 covers legacy URL).
 - ⚠️ yellow: **0**.
 - ✗ fail: **0**.
 - ⏳ blocked: **0**.
-- Findings (defects): **0**. Both prior findings (F1, F2) closed.
+- Findings discovered live: **1** (F3, fixed within smoke session by `fe29f2f6`).
+- Open findings: **0**. F1, F2, F3 all closed.
 - Ship-blocker findings: **0**.
 
-P0 result counts: ✓ live=**6** (S4, S5, S9, S10, S11, … plus S17/S18 are P2), 🔍 source=**5** (S1, S2, S3, S6, S7, S8 — counting pure source / deferred), ⚠️=**0**, ✗=**0**.
+P0 result counts: ✓ live=**11** (S1, S2, S3, S4, S5, S6, S9, S10, S11 + P1 S14 + P2 S17/S18), 🔍 source=**3** (S7, S8, S12), ⚠️=**0**, ✗=**0**.
 
-Net assessment: **green** — every live item passes, including the channel-adapter migration cross-check (A1). The two remaining `/mnt/user-data` occurrences in production code are comment-only documentation of the artifact-route back-compat surface that S5 verifies live; they do not represent unmigrated runtime paths. The user previously flagged S11 as "should now be green" in dispatch context — that prediction is confirmed.
+Net assessment: **green** — every P0 item is live-verified including the four LLM-bound paths that the prior automation could only source-inspect. F3 was caught and fixed within the smoke session itself; the fix has unit-test coverage and a live re-run confirmation.
