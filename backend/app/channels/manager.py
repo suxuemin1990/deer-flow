@@ -325,15 +325,12 @@ def _format_artifact_text(artifacts: list[str]) -> str:
     return "Created Files: 📎 " + "、".join(filenames)
 
 
-_OUTPUTS_VIRTUAL_PREFIX = "/mnt/user-data/outputs/"
-
-
 def _resolve_attachments(thread_id: str, artifacts: list[str]) -> list[ResolvedAttachment]:
-    """Resolve virtual artifact paths to host filesystem paths with metadata.
+    """Resolve artifact host paths to channel-deliverable attachments.
 
-    Only paths under ``/mnt/user-data/outputs/`` are accepted; any other
-    virtual path is rejected with a warning to prevent exfiltrating uploads
-    or workspace files via IM channels.
+    Only files located under the thread's outputs directory are accepted;
+    any other path is rejected with a warning to prevent exfiltrating
+    uploads or workspace files via IM channels.
 
     Skips artifacts that cannot be resolved (missing files, invalid paths)
     and logs warnings for them.
@@ -343,29 +340,26 @@ def _resolve_attachments(thread_id: str, artifacts: list[str]) -> list[ResolvedA
     attachments: list[ResolvedAttachment] = []
     paths = get_paths()
     outputs_dir = paths.sandbox_outputs_dir(thread_id).resolve()
-    for virtual_path in artifacts:
-        # Security: only allow files from the agent outputs directory
-        if not virtual_path.startswith(_OUTPUTS_VIRTUAL_PREFIX):
-            logger.warning("[Manager] rejected non-outputs artifact path: %s", virtual_path)
+    for artifact_path in artifacts:
+        try:
+            actual = Path(artifact_path).resolve()
+        except (ValueError, OSError) as exc:
+            logger.warning("[Manager] failed to resolve artifact %s: %s", artifact_path, exc)
             continue
         try:
-            relative = virtual_path[len(_OUTPUTS_VIRTUAL_PREFIX):]
-            actual = (outputs_dir / relative).resolve()
-            # Verify the resolved path is actually under the outputs directory
-            # (guards against path-traversal even after prefix check)
-            try:
-                actual.resolve().relative_to(outputs_dir)
-            except ValueError:
-                logger.warning("[Manager] artifact path escapes outputs dir: %s -> %s", virtual_path, actual)
-                continue
-            if not actual.is_file():
-                logger.warning("[Manager] artifact not found on disk: %s -> %s", virtual_path, actual)
-                continue
+            actual.relative_to(outputs_dir)
+        except ValueError:
+            logger.warning("[Manager] rejected non-outputs artifact path: %s", artifact_path)
+            continue
+        if not actual.is_file():
+            logger.warning("[Manager] artifact not found on disk: %s", actual)
+            continue
+        try:
             mime, _ = mimetypes.guess_type(str(actual))
             mime = mime or "application/octet-stream"
             attachments.append(
                 ResolvedAttachment(
-                    virtual_path=virtual_path,
+                    virtual_path=artifact_path,  # field name retained; value is now a host real path
                     actual_path=actual,
                     filename=actual.name,
                     mime_type=mime,
@@ -373,8 +367,9 @@ def _resolve_attachments(thread_id: str, artifacts: list[str]) -> list[ResolvedA
                     is_image=mime.startswith("image/"),
                 )
             )
-        except (ValueError, OSError) as exc:
-            logger.warning("[Manager] failed to resolve artifact %s: %s", virtual_path, exc)
+        except OSError as exc:
+            logger.warning("[Manager] failed to stat artifact %s: %s", actual, exc)
+
     return attachments
 
 
@@ -469,7 +464,7 @@ async def _ingest_inbound_files(thread_id: str, msg: InboundMessage) -> list[dic
                 {
                     "filename": safe_name,
                     "size": len(data),
-                    "path": f"/mnt/user-data/uploads/{safe_name}",
+                    "path": str(dest.resolve()),
                     "is_image": ftype == "image",
                 }
             )

@@ -369,13 +369,13 @@ class FeishuChannel(Channel):
             logger.exception("[Feishu] failed to persist downloaded resource: %s, type=%s", resolved_target, type)
             return f"Failed to obtain the [{type}]"
 
-        virtual_path = f"/mnt/user-data/uploads/{resolved_target.name}"
+        host_path = str(resolved_target.resolve())
 
         # Sandbox isolation has been removed: the file is already on the host
         # filesystem and no further synchronisation is necessary.
 
-        logger.info("[Feishu] downloaded resource mapped: file_key=%s -> %s", file_key, virtual_path)
-        return virtual_path
+        logger.info("[Feishu] downloaded resource mapped: file_key=%s -> %s", file_key, host_path)
+        return host_path
 
     # -- message formatting ------------------------------------------------
 

@@ -63,7 +63,10 @@ class ResolvedAttachment:
     """A file attachment resolved to a host filesystem path, ready for upload.
 
     Attributes:
-        virtual_path: Original virtual path (e.g. /mnt/user-data/outputs/report.pdf).
+        virtual_path: Absolute host path of the artifact (e.g.
+            /var/lib/deerflow/threads/<tid>/user-data/outputs/report.pdf).
+            Field name is retained for back-compat; the value is a host
+            real path post sandbox-isolation removal.
         actual_path: Resolved host filesystem path.
         filename: Basename of the file.
         mime_type: MIME type (e.g. "application/pdf").

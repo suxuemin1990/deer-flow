@@ -182,7 +182,7 @@ def extract_artifacts(messages):
     return artifacts
 
 def artifact_url(virtual_path):
-    # virtual_path like /mnt/user-data/outputs/file.md
+    # virtual_path like /var/lib/deerflow/threads/<tid>/user-data/outputs/file.md (or legacy /mnt/user-data/outputs/file.md)
     # API endpoint: {gateway}/api/threads/{thread_id}/artifacts/{path without leading slash}
     path = virtual_path.lstrip("/")
     return f"{gateway_url}/api/threads/{thread_id}/artifacts/{path}"
